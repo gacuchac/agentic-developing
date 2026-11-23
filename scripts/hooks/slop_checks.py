@@ -165,13 +165,17 @@ def function_mutations(function: ast.FunctionDef | ast.AsyncFunctionDef, module_
     return findings
 
 
-def check_file(path: Path) -> list[Finding]:
-    """Return all findings for one Python file, with the banned-import check for scripts/workflow/ paths."""
-    source = path.read_text()
+def check_source(source: str, path: Path) -> list[Finding]:
+    """Return all findings for Python source text, with the banned-import check when path is under scripts/workflow/."""
     findings = justification_comments(source) + hidden_state(source)
     if path.parent.parts[-2:] == ("scripts", "workflow"):
         findings += banned_imports(source, {"subprocess"})
     return sorted(findings)
+
+
+def check_file(path: Path) -> list[Finding]:
+    """Return all findings for one Python file, with the banned-import check for scripts/workflow/ paths."""
+    return check_source(path.read_text(), path)
 
 
 def main(argv: list[str]) -> int:

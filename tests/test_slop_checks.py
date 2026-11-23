@@ -168,3 +168,25 @@ def test_x2_justification_words_match_whole_words_only():
 def test_x2_write_inside_tuple_target_flagged():
     source = "STATE = {}\n\n\ndef f():\n    a, STATE['k'] = 1, 2\n    return a\n"
     assert lines(slop.hidden_state(source)) == [5]
+
+
+def test_x8_check_source_matches_check_file(tmp_path):
+    src = "ITEMS = []\n\ndef f(x):\n    ITEMS.append(x)  # hack\n"
+    path = tmp_path / "m.py"
+    path.write_text(src)
+    out = slop.check_source(src, path)
+    assert out == slop.check_file(path)
+    assert {line for line, _ in out} == {4}
+    assert len(out) == 2
+
+
+def test_x8_check_source_clean_text_has_no_findings(tmp_path):
+    assert slop.check_source("def f(a):\n    return a\n", tmp_path / "m.py") == []
+
+
+def test_x8_check_source_bans_subprocess_by_path_not_disk(tmp_path):
+    src = "import subprocess\n"
+    in_workflow = Path("scripts") / "workflow" / "x.py"
+    elsewhere = Path("scripts") / "other" / "x.py"
+    assert [m for _, m in slop.check_source(src, in_workflow)][0].startswith("SLOP003")
+    assert slop.check_source(src, elsewhere) == []
