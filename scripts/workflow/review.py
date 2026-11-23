@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 
 def rubric_ids(rubric: str) -> list[str]:
@@ -28,3 +29,25 @@ def derive_verdict(review: str, expected: list[str]) -> tuple[str, list[str]]:
         return "MALFORMED", []
     fails = [i for i in expected if found[i] == "FAIL"]
     return ("CHANGES", fails) if fails else ("PASS", [])
+
+
+def review_args(pass_name: str, run: Path, plan: str, commit: str | None, base: str | None) -> list[str]:
+    """Return codex_review's argv for a pass: [pass, --ask-file run/ask.md, --plan-file run/plan,
+    --run-dir run], then --context-file run/unit.md for tests and impl, plus run/architecture.md
+    for impl (a missing file is harmless), --commit when commit is given, --base when base is given.
+    Paths are str."""
+    args = [pass_name, "--ask-file", str(run / "ask.md"), "--plan-file", str(run / plan), "--run-dir", str(run)]
+    context = {"tests": ["unit.md"], "impl": ["unit.md", "architecture.md"]}.get(pass_name, [])
+    for name in context:
+        args += ["--context-file", str(run / name)]
+    if commit:
+        args += ["--commit", commit]
+    if base:
+        args += ["--base", base]
+    return args
+
+
+def saved_path(stderr: str) -> Path | None:
+    """Return the path after the last `saved: ` line of codex_review's stderr, or None if none."""
+    found = re.findall(r"^saved: (.+)$", stderr, re.MULTILINE)
+    return Path(found[-1].strip()) if found else None

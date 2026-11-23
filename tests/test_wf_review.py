@@ -156,3 +156,83 @@ def test_us8_extra_ids_not_expected_are_ignored():
 
 def test_us8_empty_review_with_expected_is_malformed():
     assert review.derive_verdict("", ["C1"]) == ("MALFORMED", [])
+
+
+# review_args / saved_path. Assumption: Path values appear as str in the list.
+import sys
+
+sys.path.insert(0, str(ROOT / "scripts"))
+import codex_review  # noqa: E402
+
+RUN = Path("/runs/p/t")
+SHA = "a" * 40
+HEAD_ARGS = ["--ask-file", "/runs/p/t/ask.md", "--plan-file", "/runs/p/t/plan.md", "--run-dir", "/runs/p/t"]
+UNIT = ["--context-file", "/runs/p/t/unit.md"]
+ARCH = ["--context-file", "/runs/p/t/architecture.md"]
+
+
+def _given(args):
+    flags = {a: args[i + 1] for i, a in enumerate(args) if a.startswith("--")}
+    return {k[2:].replace("-", "_"): v for k, v in flags.items()}
+
+
+def test_us8_review_args_tests_has_unit_and_no_commit():
+    assert review.review_args("tests", RUN, "plan.md", None, None) == ["tests", *HEAD_ARGS, *UNIT]
+
+
+def test_us8_review_args_impl_has_unit_then_architecture():
+    assert review.review_args("impl", RUN, "plan.md", None, None) == ["impl", *HEAD_ARGS, *UNIT, *ARCH]
+
+
+def test_us8_review_args_principles_with_sha_gets_commit():
+    assert review.review_args("principles", RUN, "plan.md", SHA, None) == ["principles", *HEAD_ARGS, "--commit", SHA]
+
+
+def test_us8_review_args_commit_with_sha_and_base():
+    got = review.review_args("commit", RUN, "plan.md", SHA, "base1")
+    assert got == ["commit", *HEAD_ARGS, "--commit", SHA, "--base", "base1"]
+
+
+def test_us8_review_args_answers_ask_with_base_gets_base():
+    got = review.review_args("answers-ask", RUN, "plan.md", None, "dev")
+    assert got == ["answers-ask", *HEAD_ARGS, "--base", "dev"]
+
+
+def test_us8_review_args_pr_with_base():
+    assert review.review_args("pr", RUN, "plan.md", None, "dev") == ["pr", *HEAD_ARGS, "--base", "dev"]
+
+
+def test_us8_review_args_plan_name_is_joined_to_run():
+    got = review.review_args("principles", RUN, "plan-phase-a.md", None, None)
+    assert got == ["principles", *HEAD_ARGS[:2], "--plan-file", "/runs/p/t/plan-phase-a.md", *HEAD_ARGS[4:]]
+
+
+def test_us8_review_args_satisfy_codex_review_required():
+    cases = [
+        ("tests", None, None),
+        ("impl", None, None),
+        ("principles", SHA, None),
+        ("commit", SHA, "b"),
+        ("answers-ask", None, "b"),
+        ("pr", None, "b"),
+    ]
+    for name, commit, base in cases:
+        args = review.review_args(name, RUN, "plan.md", commit, base)
+        assert args[0] == name
+        assert codex_review.missing_args(name, _given(args)) == [], name
+
+
+STDERR = "warning: something\nother line\nsaved: /runs/p/t/review-commit-3.md\n"
+
+
+def test_us8_saved_path_reads_real_stderr_format():
+    assert review.saved_path(STDERR) == Path("/runs/p/t/review-commit-3.md")
+
+
+def test_us8_saved_path_takes_the_last_saved_line():
+    err = "saved: /a/review-tests-1.md\nnoise\nsaved: /a/review-tests-2.md\n"
+    assert review.saved_path(err) == Path("/a/review-tests-2.md")
+
+
+def test_us8_saved_path_empty_is_none():
+    assert review.saved_path("") is None
