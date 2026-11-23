@@ -7,9 +7,8 @@ Extra keys not in the schema are allowed.
 
 import copy
 
-import pytest
-
 import agent_steps
+import pytest
 from agent_steps import SCHEMAS, validate_result
 
 QA = {"tests_added": ["tests/test_a.py"], "red_run": {"failed": ["t1"], "reason_expected": True}}
@@ -30,10 +29,10 @@ def without(base, key):
 
 
 def test_us10_schemas_exact_value():
-    assert SCHEMAS == {
+    assert {
         "qa": {"tests_added": [str], "red_run": {"failed": [str], "reason_expected": bool}},
         "implementer": {"files": {str: int}, "tests_run": {"passed": int, "failed": [str]}},
-    }
+    } == SCHEMAS
 
 
 def test_us10_valid_qa_has_no_errors():

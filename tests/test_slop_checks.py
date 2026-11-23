@@ -12,9 +12,6 @@ def lines(findings):
     return [line for line, _ in findings]
 
 
-# justification_comments
-
-
 def test_x2_workaround_comment_flagged_with_line_and_message():
     out = slop.justification_comments("x = 1\n# workaround for a bug\n")
     assert lines(out) == [2]
@@ -33,9 +30,6 @@ def test_x2_each_justification_phrase_flagged_case_insensitive():
 
 def test_x2_plain_comment_not_flagged():
     assert slop.justification_comments("# explains the invariant\nx = 1\n") == []
-
-
-# hidden_state
 
 
 def test_x2_module_constant_dict_read_in_function_not_flagged():
@@ -113,9 +107,6 @@ def test_x2_non_mutating_method_on_module_name_not_flagged():
     assert slop.hidden_state("S = {1}\n\ndef f():\n    return S.copy(), S.get(1)\n") == []
 
 
-# banned_imports
-
-
 def test_x2_from_subprocess_import_flagged():
     out = slop.banned_imports("x = 1\nfrom subprocess import run\n", {"subprocess"})
     assert lines(out) == [2]
@@ -129,9 +120,6 @@ def test_x2_import_banned_module_and_submodule_flagged():
 
 def test_x2_unbanned_import_not_flagged():
     assert slop.banned_imports("import json\nfrom pathlib import Path\n", {"subprocess"}) == []
-
-
-# main
 
 
 def test_x2_main_flags_subprocess_under_scripts_workflow(tmp_path, capsys):

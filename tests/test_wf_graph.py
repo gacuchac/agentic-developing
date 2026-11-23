@@ -141,7 +141,7 @@ def test_us7_edges_match_the_unit_loop_table():
     for node in expected:
         if node.endswith("_decide"):
             expected[node] = {**expected[node], **graph.STOPS}
-    assert graph.EDGES == expected
+    assert expected == graph.EDGES
 
 
 def test_us7_agent_steps_exact():
@@ -188,12 +188,25 @@ def test_us7_caps():
 def test_us7_kind_of_every_node():
     agent = {"qa_write", "implement"}
     decide = {
-        "red_decide", "tests_decide", "impl_decide", "fail_decide",
-        "commit_decide", "full_decide", "aa_decide",
+        "red_decide",
+        "tests_decide",
+        "impl_decide",
+        "fail_decide",
+        "commit_decide",
+        "full_decide",
+        "aa_decide",
     }
     auto = {
-        "write_unit", "red_run", "tests_review", "impl_review", "run_tests",
-        "count_lines", "commit", "commit_reviews", "next_unit", "full_suite",
+        "write_unit",
+        "red_run",
+        "tests_review",
+        "impl_review",
+        "run_tests",
+        "count_lines",
+        "commit",
+        "commit_reviews",
+        "next_unit",
+        "full_suite",
         "answers_ask",
     }
     expected = {n: "agent" for n in agent}
@@ -245,7 +258,7 @@ def test_us7_no_entries_means_no_cap():
 
 
 def test_us7_back_rounds_returns_exact_count():
-    for n in range(0, 6):
+    for n in range(6):
         assert graph.back_rounds([_impl_back()] * n, "implement") == n
 
 
@@ -276,8 +289,7 @@ def test_us7_entries_after_user_continue_count():
 
 
 def test_us7_only_last_user_continue_resets():
-    entries = [_impl_back(), _user_continue(), _impl_back(), _impl_back(),
-               _user_continue(), _impl_back()]
+    entries = [_impl_back(), _user_continue(), _impl_back(), _impl_back(), _user_continue(), _impl_back()]
     assert graph.back_rounds(entries, "implement") == 1
 
 
@@ -317,14 +329,22 @@ def test_us7_cap_reached_any_back_edge_of_node_triggers():
 
 
 def _review(node="tests_review", outcome="CHANGES"):
-    return {"node": node, "outcome": outcome, "verdict": outcome,
-            "reviews": [{"pass": "tests", "review": "review-tests-1.md",
-                         "verdict": outcome, "fails": ["T1", "T2"]}]}
+    return {
+        "node": node,
+        "outcome": outcome,
+        "verdict": outcome,
+        "reviews": [{"pass": "tests", "review": "review-tests-1.md", "verdict": outcome, "fails": ["T1", "T2"]}],
+    }
 
 
 def _dismiss(decision, ids, node="tests_decide", pass_="tests"):
-    return {"node": node, "decision": decision, "evidence": {"findings": ids},
-            "passes": {i: pass_ for i in ids}, "to": "qa_write"}
+    return {
+        "node": node,
+        "decision": decision,
+        "evidence": {"findings": ids},
+        "passes": {i: pass_ for i in ids},
+        "to": "qa_write",
+    }
 
 
 def test_us7_wrong_dismissals_empty_history():
@@ -341,8 +361,11 @@ def test_us7_wrong_dismissals_counts_each_id_in_an_entry():
 
 
 def test_us7_wrong_dismissals_separate_passes_counted_separately():
-    entries = [_dismiss("wrong", ["T1"]), _dismiss("wrong", ["C1"], "commit_decide", "commit"),
-               _dismiss("wrong", ["T2"])]
+    entries = [
+        _dismiss("wrong", ["T1"]),
+        _dismiss("wrong", ["C1"], "commit_decide", "commit"),
+        _dismiss("wrong", ["T2"]),
+    ]
     assert graph.wrong_dismissals(entries) == {"tests": 2, "commit": 1}
 
 
@@ -352,14 +375,18 @@ def test_us7_wrong_dismissals_ignores_overstated_and_correct():
 
 
 def test_us7_wrong_dismissals_mixed_decisions_count_only_wrong():
-    entries = [_dismiss("overstated", ["T1"]), _dismiss("wrong", ["T2"]),
-               _dismiss("correct", ["T3"]), _review()]
+    entries = [_dismiss("overstated", ["T1"]), _dismiss("wrong", ["T2"]), _dismiss("correct", ["T3"]), _review()]
     assert graph.wrong_dismissals(entries) == {"tests": 1}
 
 
 def test_us7_wrong_dismissals_uses_the_passes_map_per_id():
-    e = {"node": "impl_decide", "decision": "wrong", "evidence": {"findings": ["A1", "B1"]},
-         "passes": {"A1": "impl", "B1": "principles"}, "to": "x"}
+    e = {
+        "node": "impl_decide",
+        "decision": "wrong",
+        "evidence": {"findings": ["A1", "B1"]},
+        "passes": {"A1": "impl", "B1": "principles"},
+        "to": "x",
+    }
     assert graph.wrong_dismissals([e]) == {"impl": 1, "principles": 1}
 
 
@@ -437,7 +464,12 @@ STOP_LIST = ["escalate", "architecture_stop"]
 
 def test_us7_options_tests_decide_no_history():
     assert graph.legal_options("tests_decide", [], set()) == [
-        "correct", "overstated", "wrong", "escalate", "architecture_stop"]
+        "correct",
+        "overstated",
+        "wrong",
+        "escalate",
+        "architecture_stop",
+    ]
 
 
 def test_us7_options_follow_edges_order_for_every_decide_node():
@@ -473,7 +505,11 @@ def test_us7_options_cap_after_user_continue_is_reset():
 
 def test_us7_options_two_wrong_dismissals_remove_wrong():
     assert graph.legal_options("tests_decide", _wrongs("tests", 2), set()) == [
-        "correct", "overstated", "escalate", "architecture_stop"]
+        "correct",
+        "overstated",
+        "escalate",
+        "architecture_stop",
+    ]
 
 
 def test_us7_options_one_wrong_dismissal_keeps_wrong():
@@ -486,7 +522,11 @@ def test_us7_options_wrong_dismissals_of_other_pass_do_not_count():
 
 def test_us7_options_impl_decide_two_wrong_removes_wrong():
     assert graph.legal_options("impl_decide", _wrongs("impl", 2, "impl_decide"), set()) == [
-        "correct", "overstated", "escalate", "architecture_stop"]
+        "correct",
+        "overstated",
+        "escalate",
+        "architecture_stop",
+    ]
 
 
 def test_us7_options_commit_decide_keeps_wrong_while_alternatives_under_cap():
@@ -500,12 +540,21 @@ def test_us7_options_commit_decide_drops_wrong_when_all_passes_at_cap():
     for p in ("commit", "principles", "alternatives"):
         entries += _wrongs(p, 2, "commit_decide")
     assert graph.legal_options("commit_decide", entries, set()) == [
-        "correct", "overstated", "escalate", "architecture_stop"]
+        "correct",
+        "overstated",
+        "escalate",
+        "architecture_stop",
+    ]
 
 
 def test_us7_options_commit_decide_no_history_has_wrong():
     assert graph.legal_options("commit_decide", [], set()) == [
-        "correct", "overstated", "wrong", "escalate", "architecture_stop"]
+        "correct",
+        "overstated",
+        "wrong",
+        "escalate",
+        "architecture_stop",
+    ]
 
 
 def test_us7_options_decide_without_review_pass_never_loses_wrong_rule():

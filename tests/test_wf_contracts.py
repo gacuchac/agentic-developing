@@ -1,4 +1,5 @@
 """Tests of scripts/workflow/contracts.py (US-7): the contract guard."""
+
 from __future__ import annotations
 
 import contracts
@@ -41,9 +42,7 @@ def test_us7_removed_public_def_counts():
 
 
 def test_us7_changed_in_one_file_while_other_only_adds():
-    d = _diff("scripts/a.py", "-def f(a):\n+def f(a, b):\n") + _diff(
-        "scripts/b.py", "+def g(a):\n+    return a\n"
-    )
+    d = _diff("scripts/a.py", "-def f(a):\n+def f(a, b):\n") + _diff("scripts/b.py", "+def g(a):\n+    return a\n")
     assert contracts.changed_signatures(d) == {"f"}
 
 

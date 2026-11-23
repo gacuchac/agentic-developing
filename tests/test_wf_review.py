@@ -1,4 +1,5 @@
 """Tests for review.py: the verdict comes from criterion lines, never the VERDICT line."""
+
 from pathlib import Path
 
 import review

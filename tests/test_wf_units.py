@@ -1,4 +1,5 @@
 """Tests of scripts/workflow/units.py: unit text from the plan, and fix units."""
+
 import units
 
 PLAN = """# Plan
@@ -63,18 +64,10 @@ def test_us6_plan_units_count_and_order():
 def test_us6_plan_units_exact_text_of_each_unit():
     got = [u.rstrip("\n") for u in units.plan_units(PLAN)]
     assert got[0] == (
-        "### 1. state.py: create the state (US-6)\n"
-        "Estimate: ~24 lines.\n"
-        "\n"
-        "Contracts:\n"
-        "- `new_state()` gives the shape."
+        "### 1. state.py: create the state (US-6)\nEstimate: ~24 lines.\n\nContracts:\n- `new_state()` gives the shape."
     ).rstrip("\n")
     assert got[2] == "### 6b. review.py: extra (US-3)\nBody of 6b."
-    assert got[3] == (
-        "### 3. last.py: final (US-4)\n"
-        "Final body line one.\n"
-        "Final body line two."
-    )
+    assert got[3] == ("### 3. last.py: final (US-4)\nFinal body line one.\nFinal body line two.")
 
 
 def test_us6_plan_units_keep_subheading_and_table_inside_unit():
@@ -133,12 +126,7 @@ def test_us6_fix_text_exact_output():
     unit = "### 7. thing (US-7)\nEstimate: ~5 lines.\nBody."
     out = units.fix_text(unit, "principles P2 on abc1234", ["FAIL a", "FAIL b"])
     # no trailing newline
-    assert out == (
-        "### 7. thing (US-7)\n"
-        "Fix: principles P2 on abc1234\n"
-        "FAIL a\n"
-        "FAIL b"
-    )
+    assert out == ("### 7. thing (US-7)\nFix: principles P2 on abc1234\nFAIL a\nFAIL b")
 
 
 def test_us6_fix_text_excludes_rest_of_plan_unit_body():
@@ -177,9 +165,7 @@ def test_us10_commit_message_keeps_multiple_stories_whole():
 
 def test_us10_commit_message_fix_unit():
     md = units.fix_text(UNIT3, "principles P4 on abc1234", ["detail line"])
-    assert units.commit_message(md) == (
-        "US-7: Fix principles P4 on abc1234: graph.py: edges of the unit loop"
-    )
+    assert units.commit_message(md) == ("US-7: Fix principles P4 on abc1234: graph.py: edges of the unit loop")
 
 
 def test_us10_commit_message_last_parentheses_are_the_stories():

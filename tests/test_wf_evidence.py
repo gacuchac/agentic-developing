@@ -1,8 +1,7 @@
 """Tests for evidence.py: quote_near and quote_in (US-9)."""
 
-import pytest
-
 import evidence
+import pytest
 
 
 def make_text(n=20, **special):
@@ -132,7 +131,6 @@ def test_us9_near_empty_text_false():
     assert evidence.quote_near("", 1, "x") is False
 
 
-# quote_in
 def test_us9_in_found_in_one_of_many_texts():
     assert evidence.quote_in(["nothing here", "has the needle inside", "x"], "needle") is True
 
@@ -181,7 +179,6 @@ def test_us9_in_case_sensitive():
     assert evidence.quote_in(["Needle"], "needle") is False
 
 
-# check_evidence (US-9)
 FILES = {"a.py": make_text(l10="the quick brown fox")}
 
 
@@ -244,8 +241,7 @@ def test_us9_overstated_missing_findings_key_returns_errors():
 
 
 def test_us9_overstated_several_bad_one_error_each():
-    errs = check("overstated", [{"id": "X1", "reason": "r"}, {"id": "T1", "reason": " "},
-                                {"id": "T2", "reason": "ok"}])
+    errs = check("overstated", [{"id": "X1", "reason": "r"}, {"id": "T1", "reason": " "}, {"id": "T2", "reason": "ok"}])
     assert len(errs) >= 2
     assert any("X1" in e for e in errs) and any("T1" in e for e in errs)
 
@@ -289,8 +285,7 @@ def test_us9_wrong_missing_findings_key_returns_errors():
 
 
 def test_us9_wrong_several_bad_one_error_each():
-    errs = check("wrong", [wrong_item(id="X1"), wrong_item(id="T2", file="nope.py"),
-                           wrong_item(id="T1", line=19)])
+    errs = check("wrong", [wrong_item(id="X1"), wrong_item(id="T2", file="nope.py"), wrong_item(id="T1", line=19)])
     assert len(errs) >= 3
     for k in ("X1", "nope.py"):
         assert any(k in e for e in errs)
@@ -302,8 +297,12 @@ ASK = "Also keep the output sorted by date."
 
 
 def dfacts(tmp_path, **over):
-    f = {"failures": ["tests/t.py::test_a", "tests/t.py::test_b"], "docs": [PLAN, ASK],
-         "run": tmp_path, "resume": ["write_unit", "qa"]}
+    f = {
+        "failures": ["tests/t.py::test_a", "tests/t.py::test_b"],
+        "docs": [PLAN, ASK],
+        "run": tmp_path,
+        "resume": ["write_unit", "qa"],
+    }
     f.update(over)
     return f
 
@@ -444,9 +443,12 @@ def test_us9_new_options_unknown_option_fails(tmp_path):
 
 
 def test_us9_new_options_missing_facts_return_errors_not_exceptions(tmp_path):
-    cases = {"tests_wrong": tw(), "code_wrong": {"tests": ["tests/t.py::test_a"]},
-             "architecture_stop": {"path": "architecture-change-a.md"},
-             "user_continue": {"user_said": "go", "to": "qa"}}
+    cases = {
+        "tests_wrong": tw(),
+        "code_wrong": {"tests": ["tests/t.py::test_a"]},
+        "architecture_stop": {"path": "architecture-change-a.md"},
+        "user_continue": {"user_said": "go", "to": "qa"},
+    }
     for opt, ev in cases.items():
         assert evidence.check_evidence(opt, ev, {}), opt
 
@@ -461,8 +463,15 @@ def lenient(tmp_path, v):
     """Facts that would accept str(v) / "" everywhere, so only the type check can reject."""
     s = [str(v), ""]
     text = make_text(l10="quick brown " + str(v))
-    return dfacts(tmp_path, failures=["tests/t.py::test_a"] + s, docs=[PLAN, ASK] + s,
-                  resume=["qa"] + s, read=lambda f: text, fails=["T1"], capped=set())
+    return dfacts(
+        tmp_path,
+        failures=["tests/t.py::test_a"] + s,
+        docs=[PLAN, ASK] + s,
+        resume=["qa"] + s,
+        read=lambda f: text,
+        fails=["T1"],
+        capped=set(),
+    )
 
 
 def run_bad(option, ev, field, tmp_path, v):
@@ -544,6 +553,7 @@ def test_us9_architecture_stop_path_object_to_real_file_fails(tmp_path):
 
 def test_us9_wrong_path_object_file_with_valid_lookup_fails():
     import pathlib
+
     ev = {"findings": [wrong_item(id="T1", file=pathlib.Path("a.py"))]}
     errs = evidence.check_evidence("wrong", ev, make_facts())
     assert errs and any(re.search(r"\bfile\b", e) for e in errs)

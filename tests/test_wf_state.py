@@ -1,4 +1,5 @@
 """Tests of scripts/workflow/state.py: create, load and save the state."""
+
 import json
 
 import state

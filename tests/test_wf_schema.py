@@ -3,7 +3,6 @@
 import copy
 
 import pytest
-
 import schema
 
 
@@ -203,8 +202,18 @@ def test_us10_path_prefixes_leaf_and_list_errors():
 
 # robustness
 WEIRD = [None, [], [None], "str", 5, 1.5, True, {}, {"a": None}, {1: 2}, [[]], ([1],), object()]
-SCHEMAS = [str, int, bool, [str], [[int]], {str: int}, {"a": int}, {"a": {"b": [str]}}, {"a": {str: [int]}},
-           {"a": [{"b": int}]}]
+SCHEMAS = [
+    str,
+    int,
+    bool,
+    [str],
+    [[int]],
+    {str: int},
+    {"a": int},
+    {"a": {"b": [str]}},
+    {"a": {str: [int]}},
+    {"a": [{"b": int}]},
+]
 
 
 @pytest.mark.parametrize("sch", SCHEMAS)
