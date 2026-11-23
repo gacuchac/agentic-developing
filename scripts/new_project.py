@@ -3,12 +3,19 @@
 
 from __future__ import annotations
 
+import argparse
+import subprocess
+import sys
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[1]
 TEMPLATE = WORKSPACE / "templates" / "project"
 # Copied once from the workspace at creation, then owned by the project (each project runs its own CI).
-CI_FILES = (".github/workflows/branch-order.yml", "scripts/ci/check_branch_order.py", "tests/test_check_branch_order.py")
+CI_FILES = (
+    ".github/workflows/branch-order.yml",
+    "scripts/ci/check_branch_order.py",
+    "tests/test_check_branch_order.py",
+)
 
 
 def project_files(name: str, description: str) -> dict[str, str]:
@@ -21,3 +28,25 @@ def project_files(name: str, description: str) -> dict[str, str]:
     files.update({rel: (WORKSPACE / rel).read_text() for rel in CI_FILES})
     files["evals/cases/.gitkeep"] = ""
     return files
+
+
+def write_files(root: Path, files: dict[str, str]) -> None:
+    """Write each file under root, creating folders as needed."""
+    for rel, text in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text)
+
+
+def init_repo(root: Path) -> None:
+    """git init on main, commit the scaffold (exempt from the cap as a first commit), create dev and uat, switch to dev."""
+    steps = (
+        ["init", "-q", "-b", "main"],
+        ["add", "-A"],
+        ["commit", "-q", "-m", "Start from the workspace project template"],
+        ["branch", "dev"],
+        ["branch", "uat"],
+        ["switch", "-q", "dev"],
+    )
+    for step in steps:
+        subprocess.run(["git", "-C", str(root), *step], check=True)
+
