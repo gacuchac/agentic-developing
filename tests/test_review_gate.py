@@ -116,12 +116,12 @@ def repo(tmp_path, monkeypatch):
 
 
 def test_us2_needs_review_false_right_after_branching(repo):
-    assert gate.needs_review() is False
+    assert gate.needs_review(repo) is False
 
 
 def test_us2_needs_review_true_after_one_commit_on_branch(repo):
     _commit("own")
-    assert gate.needs_review() is True
+    assert gate.needs_review(repo) is True
 
 
 def test_us2_needs_review_false_when_head_is_merge_of_dev(repo):
@@ -130,10 +130,17 @@ def test_us2_needs_review_false_when_head_is_merge_of_dev(repo):
     _commit("newdev")
     _git("checkout", "feature/x")
     _git("merge", "--no-ff", "-m", "merge dev", "dev")
-    assert gate.needs_review() is False
+    assert gate.needs_review(repo) is False
 
 
 def test_us2_needs_review_true_when_repo_has_no_dev(repo):
     _git("branch", "-m", "dev", "main")
     _commit("own")
-    assert gate.needs_review() is True
+    assert gate.needs_review(repo) is True
+
+
+def test_us2_needs_review_uses_repo_arg_not_cwd(repo, tmp_path_factory, monkeypatch):
+    _commit("own")
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    monkeypatch.chdir(elsewhere)
+    assert gate.needs_review(repo) is True

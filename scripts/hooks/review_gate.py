@@ -35,8 +35,8 @@ def reviewed(folder: Path, sha: str) -> bool:
     return any(f"base: commit {sha} " in f.read_text() for f in folder.glob("review-commit-*.md"))
 
 
-def needs_review() -> bool:
-    """Return True when HEAD is not on dev and has exactly one parent (a merge commit needs no review)."""
-    off_dev = subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", "dev"], capture_output=True, check=False).returncode != 0
-    parents = subprocess.run(["git", "rev-list", "--parents", "-n", "1", "HEAD"], capture_output=True, text=True, check=True).stdout
+def needs_review(repo: Path) -> bool:
+    """Return True when HEAD is not on dev and has exactly one parent (a merge commit needs no review). Depends only on `repo`."""
+    off_dev = subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", "dev"], cwd=repo, capture_output=True, check=False).returncode != 0
+    parents = subprocess.run(["git", "rev-list", "--parents", "-n", "1", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout
     return off_dev and len(parents.split()) == 2
