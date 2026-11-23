@@ -142,3 +142,76 @@ def test_us7_edges_match_the_unit_loop_table():
         if node.endswith("_decide"):
             expected[node] = {**expected[node], **graph.STOPS}
     assert graph.EDGES == expected
+
+
+def test_us7_agent_steps_exact():
+    assert graph.AGENT_STEPS == {
+        "qa_write": ("qa", "write"),
+        "implement": ("implementer", "code"),
+    }
+
+
+def test_us7_review_passes_exact():
+    assert graph.REVIEW_PASSES == {
+        "tests_review": ("tests",),
+        "impl_review": ("impl",),
+        "commit_reviews": ("commit", "principles", "alternatives"),
+        "answers_ask": ("answers-ask",),
+    }
+
+
+def test_us7_decides_on_exact():
+    assert graph.DECIDES_ON == {
+        "tests_decide": "tests_review",
+        "impl_decide": "impl_review",
+        "commit_decide": "commit_reviews",
+        "aa_decide": "answers_ask",
+    }
+
+
+def test_us7_back_edges_exact_with_targets():
+    assert graph.BACK_EDGES == {
+        ("tests_decide", "correct"): "qa_write",
+        ("red_decide", "tests_wrong"): "qa_write",
+        ("impl_decide", "correct"): "implement",
+        ("fail_decide", "code_wrong"): "implement",
+        ("fail_decide", "tests_wrong"): "qa_write",
+        ("count_lines", "over"): "implement",
+    }
+
+
+def test_us7_caps():
+    assert graph.ROUND_CAP == 3
+    assert graph.WRONG_CAP == 2
+
+
+def test_us7_kind_of_every_node():
+    agent = {"qa_write", "implement"}
+    decide = {
+        "red_decide", "tests_decide", "impl_decide", "fail_decide",
+        "commit_decide", "full_decide", "aa_decide",
+    }
+    auto = {
+        "write_unit", "red_run", "tests_review", "impl_review", "run_tests",
+        "count_lines", "commit", "commit_reviews", "next_unit", "full_suite",
+        "answers_ask",
+    }
+    expected = {n: "agent" for n in agent}
+    expected.update({n: "decide" for n in decide})
+    expected.update({n: "auto" for n in auto})
+    expected.update({"user": "user", "done": "end"})
+    assert {n: graph.kind(n) for n in EDGES} == expected
+
+
+def test_us7_commit_is_auto():
+    assert graph.kind("commit") == "auto"
+
+
+def test_us7_back_edges_are_real_edges():
+    for (node, outcome), target in graph.BACK_EDGES.items():
+        assert EDGES[node][outcome] == target
+
+
+def test_us7_decides_on_values_are_review_passes():
+    for decide, review in graph.DECIDES_ON.items():
+        assert review in graph.REVIEW_PASSES, decide

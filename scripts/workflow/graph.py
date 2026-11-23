@@ -28,3 +28,31 @@ _RAW: dict[str, dict[str, str]] = {
 }
 
 EDGES: dict[str, dict[str, str]] = {n: {**e, **STOPS} if n.endswith("_decide") else e for n, e in _RAW.items()}
+
+AGENT_STEPS = {"qa_write": ("qa", "write"), "implement": ("implementer", "code")}
+REVIEW_PASSES = {
+    "tests_review": ("tests",),
+    "impl_review": ("impl",),
+    "commit_reviews": ("commit", "principles", "alternatives"),
+    "answers_ask": ("answers-ask",),
+}
+DECIDES_ON = {
+    "tests_decide": "tests_review",
+    "impl_decide": "impl_review",
+    "commit_decide": "commit_reviews",
+    "aa_decide": "answers_ask",
+}
+_BACK = [("tests_decide", "correct"), ("red_decide", "tests_wrong"), ("impl_decide", "correct")]
+_BACK += [("fail_decide", "code_wrong"), ("fail_decide", "tests_wrong"), ("count_lines", "over")]
+BACK_EDGES: dict[tuple[str, str], str] = {(n, o): EDGES[n][o] for n, o in _BACK}
+ROUND_CAP = 3
+WRONG_CAP = 2
+
+
+def kind(node: str) -> str:
+    """Return "agent", "decide", "user", "end" or "auto" for a node of EDGES."""
+    if node in AGENT_STEPS:
+        return "agent"
+    if "escalate" in EDGES[node]:
+        return "decide"
+    return {"user": "user", "done": "end"}.get(node, "auto")
