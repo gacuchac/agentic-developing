@@ -53,7 +53,8 @@ You are the main orchestrator. For every feature or bug:
 11. Never commit to main, uat or dev directly, in any repo. Each task gets a feature/, bugfix/ or hotfix/ branch off a clean, up-to-date dev of its project and comes back by PR. If a checkout has uncommitted changes, stop and ask me. You may merge PRs into dev and promote dev or a hotfix to uat. Never approve or merge a PR into main; I do that.
 
 ## Conventions
-- Python, tests with pytest under each project's tests/. Run them with the project's `.venv/bin/python -m pytest` when it has a `.venv`, else `python3 -m pytest`. Use `set -o pipefail` when piping test output.
+- Python for backends and the workflow scripts, tests with pytest under each project's tests/. Run them with the project's `.venv/bin/python -m pytest` when it has a `.venv`, else `python3 -m pytest`. Use `set -o pipefail` when piping test output.
+- TypeScript and React for front ends (`typescript-best-practices`, `principle-type-system-discipline`), tested with that project's own runner, named in its CLAUDE.md.
 - Eval cases are written to the task's run folder, then committed to evals/cases/ in the project on the task's branch; eval runs go in the project's evals/runs/ (git-ignored). The implementer never edits evals/.
 - Branches map to environments: dev to dev, uat to UAT, main to production. Merging into dev or uat may deploy that environment, which is allowed; nothing reaches production without my approval.
 - Quick deploys outside that flow use my personal Railway and GitHub accounts. Deploy only when I ask.
