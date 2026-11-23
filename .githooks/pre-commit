@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""Git pre-commit hook: block commits over 30 changed lines (scripts/hooks/commit_cap.py)."""
+"""Git pre-commit hook for every repo under Developing/: block commits over 30 changed lines.
+
+Runs the workspace's own scripts/hooks/commit_cap.py, found next to this hook, in the committing repo.
+"""
 import subprocess
 import sys
+from pathlib import Path
 
-sys.exit(subprocess.call([sys.executable, "scripts/hooks/commit_cap.py"]))
+CAP = Path(__file__).resolve().parents[1] / "scripts" / "hooks" / "commit_cap.py"
+sys.exit(subprocess.call([sys.executable, str(CAP)]))
