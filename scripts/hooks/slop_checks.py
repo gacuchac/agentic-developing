@@ -105,11 +105,24 @@ def root_name(node: ast.AST) -> str | None:
     return node.id if isinstance(node, ast.Name) else None
 
 
+def flat_targets(targets: list[ast.AST]) -> list[ast.AST]:
+    """Return targets with tuple, list and starred targets expanded into their elements."""
+    flat: list[ast.AST] = []
+    for target in targets:
+        if isinstance(target, (ast.Tuple, ast.List)):
+            flat.extend(flat_targets(target.elts))
+        elif isinstance(target, ast.Starred):
+            flat.extend(flat_targets([target.value]))
+        else:
+            flat.append(target)
+    return flat
+
+
 def mutated_name(node: ast.AST) -> str | None:
     """Return the name a statement or call node writes to, or None if it writes to none."""
     targets: list[ast.AST] = []
     if isinstance(node, ast.Assign):
-        targets = [t for t in node.targets if not isinstance(t, ast.Name)]
+        targets = [t for t in flat_targets(node.targets) if not isinstance(t, ast.Name)]
     elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
         targets = [node.target]
     elif isinstance(node, ast.Delete):
