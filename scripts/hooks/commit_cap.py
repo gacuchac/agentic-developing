@@ -23,6 +23,12 @@ def file_counts(numstat: str) -> dict[str, int]:
     return counts
 
 
+def without_deleted_files(counts: dict[str, int], name_status: str) -> dict[str, int]:
+    """counts with each wholly deleted file (status D in `git diff --name-status`) counted 0: deleting is not a change."""
+    deleted = {line.split("\t", 1)[1] for line in name_status.splitlines() if line.startswith("D\t")}
+    return {path: 0 if path in deleted else n for path, n in counts.items()}
+
+
 def count_changed_lines(numstat: str) -> int:
     """Total changed lines over all files, counted as in file_counts."""
     return sum(file_counts(numstat).values())
@@ -49,7 +55,8 @@ def main() -> int:
     """Exit 0 when the staged changes fit in MAX_LINES (or finish a merge or make the first commit), else exit 1."""
     if first_commit() or merge_in_progress(Path(git("rev-parse", "--git-dir").strip())):
         return 0
-    counts = file_counts(git("diff", "--cached", "--numstat", "-M"))
+    numstat, name_status = (git("diff", "--cached", flag, "-M") for flag in ("--numstat", "--name-status"))
+    counts = without_deleted_files(file_counts(numstat), name_status)
     if sum(counts.values()) <= MAX_LINES:
         return 0
     lines = "\n".join(f"  {n:4d}  {path}" for path, n in counts.items())

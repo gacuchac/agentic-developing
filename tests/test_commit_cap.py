@@ -21,6 +21,11 @@ def test_rename_counts_zero_and_binary_counts_one():
     assert cap.count_changed_lines("0\t0\told.py => new.py\n-\t-\tlogo.png\n") == 1
 
 
+def test_deleting_a_whole_file_counts_zero():
+    counts = cap.without_deleted_files({"old.py": 140, "kept.py": 3}, "D\told.py\nM\tkept.py\n")
+    assert counts == {"old.py": 0, "kept.py": 3}
+
+
 def test_empty_numstat_counts_zero():
     assert cap.count_changed_lines("") == 0
 
