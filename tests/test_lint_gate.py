@@ -87,3 +87,35 @@ def test_x4_extensionless_non_python_file_is_ignored(tmp_path, monkeypatch):
     repo = _repo(tmp_path)
     _stage(repo, "bin/run", "#!/bin/sh\nITEMS=1\n", 0o755)
     assert _gate(repo, monkeypatch) == 0
+
+
+def _write_only(repo: Path, name: str, text: str) -> None:
+    (repo / name).write_text(text)
+
+
+def test_x8_staged_ruff_error_blocks_even_if_working_tree_fixed(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _stage(repo, "m.py", RUFF_ERROR)
+    _write_only(repo, "m.py", CLEAN)
+    assert _gate(repo, monkeypatch) == 1
+
+
+def test_x8_staged_slop_blocks_even_if_working_tree_fixed(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _stage(repo, "m.py", SLOP)
+    _write_only(repo, "m.py", CLEAN)
+    assert _gate(repo, monkeypatch) == 1
+
+
+def test_x8_staged_clean_passes_even_if_working_tree_broken(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _stage(repo, "m.py", CLEAN)
+    _write_only(repo, "m.py", RUFF_ERROR + SLOP)
+    assert _gate(repo, monkeypatch) == 0
+
+
+def test_x8_staged_shebang_file_checked_from_staged_content(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _stage(repo, "bin/tool", "#!/usr/bin/env python3\n" + SLOP, 0o755)
+    _write_only(repo, "bin/tool", "#!/usr/bin/env python3\n" + CLEAN)
+    assert _gate(repo, monkeypatch) == 1
