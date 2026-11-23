@@ -314,3 +314,111 @@ def test_us7_cap_reached_any_back_edge_of_node_triggers():
     entries = [_back("tests_decide", "correct", "qa_write")] * 3
     assert graph.cap_reached(entries, "fail_decide") is True
     assert graph.cap_reached(entries, "red_decide") is True
+
+
+def _review(node="tests_review", outcome="CHANGES"):
+    return {"node": node, "outcome": outcome, "verdict": outcome,
+            "reviews": [{"pass": "tests", "review": "review-tests-1.md",
+                         "verdict": outcome, "fails": ["T1", "T2"]}]}
+
+
+def _dismiss(decision, ids, node="tests_decide", pass_="tests"):
+    return {"node": node, "decision": decision, "evidence": {"findings": ids},
+            "passes": {i: pass_ for i in ids}, "to": "qa_write"}
+
+
+def test_us7_wrong_dismissals_empty_history():
+    assert graph.wrong_dismissals([]) == {}
+
+
+def test_us7_wrong_dismissals_counts_per_pass():
+    entries = [_dismiss("wrong", ["T1"]), _dismiss("wrong", ["T2"])]
+    assert graph.wrong_dismissals(entries) == {"tests": 2}
+
+
+def test_us7_wrong_dismissals_counts_each_id_in_an_entry():
+    assert graph.wrong_dismissals([_dismiss("wrong", ["T1", "T2", "T3"])]) == {"tests": 3}
+
+
+def test_us7_wrong_dismissals_separate_passes_counted_separately():
+    entries = [_dismiss("wrong", ["T1"]), _dismiss("wrong", ["C1"], "commit_decide", "commit"),
+               _dismiss("wrong", ["T2"])]
+    assert graph.wrong_dismissals(entries) == {"tests": 2, "commit": 1}
+
+
+def test_us7_wrong_dismissals_ignores_overstated_and_correct():
+    entries = [_dismiss("overstated", ["T1"]), _dismiss("correct", ["T2"])]
+    assert graph.wrong_dismissals(entries) == {}
+
+
+def test_us7_wrong_dismissals_mixed_decisions_count_only_wrong():
+    entries = [_dismiss("overstated", ["T1"]), _dismiss("wrong", ["T2"]),
+               _dismiss("correct", ["T3"]), _review()]
+    assert graph.wrong_dismissals(entries) == {"tests": 1}
+
+
+def test_us7_wrong_dismissals_uses_the_passes_map_per_id():
+    e = {"node": "impl_decide", "decision": "wrong", "evidence": {"findings": ["A1", "B1"]},
+         "passes": {"A1": "impl", "B1": "principles"}, "to": "x"}
+    assert graph.wrong_dismissals([e]) == {"impl": 1, "principles": 1}
+
+
+def test_us7_undismissed_without_dismissals_returns_all_fails():
+    assert graph.undismissed([_review()], "tests_decide", ["T1", "T2"]) == ["T1", "T2"]
+
+
+def test_us7_undismissed_after_dismissing_one():
+    entries = [_review(), _dismiss("wrong", ["T1"])]
+    assert graph.undismissed(entries, "tests_decide", ["T1", "T2"]) == ["T2"]
+
+
+def test_us7_undismissed_overstated_also_dismisses():
+    entries = [_review(), _dismiss("overstated", ["T1"])]
+    assert graph.undismissed(entries, "tests_decide", ["T1", "T2"]) == ["T2"]
+
+
+def test_us7_undismissed_all_dismissed_is_empty():
+    entries = [_review(), _dismiss("wrong", ["T1"]), _dismiss("overstated", ["T2"])]
+    assert graph.undismissed(entries, "tests_decide", ["T1", "T2"]) == []
+
+
+def test_us7_undismissed_correct_does_not_dismiss():
+    entries = [_review(), _dismiss("correct", ["T1"])]
+    assert graph.undismissed(entries, "tests_decide", ["T1", "T2"]) == ["T1", "T2"]
+
+
+def test_us7_undismissed_other_node_does_not_count():
+    entries = [_review(), _dismiss("wrong", ["T1"], node="impl_decide")]
+    assert graph.undismissed(entries, "tests_decide", ["T1", "T2"]) == ["T1", "T2"]
+
+
+def test_us7_undismissed_newer_review_clears_earlier_dismissals():
+    entries = [_review(), _dismiss("wrong", ["T1"]), _review()]
+    assert graph.undismissed(entries, "tests_decide", ["T1", "T2"]) == ["T1", "T2"]
+
+
+def test_us7_undismissed_counts_only_dismissals_after_last_review():
+    entries = [_dismiss("wrong", ["T2"]), _review(), _dismiss("wrong", ["T1"])]
+    assert graph.undismissed(entries, "tests_decide", ["T1", "T2"]) == ["T2"]
+
+
+def test_us7_undismissed_follows_order_of_fails():
+    entries = [_review(), _dismiss("wrong", ["T2"])]
+    assert graph.undismissed(entries, "tests_decide", ["T3", "T2", "T1"]) == ["T3", "T1"]
+
+
+def test_us7_undismissed_ignores_dismissed_ids_not_in_fails():
+    entries = [_review(), _dismiss("wrong", ["T9"])]
+    assert graph.undismissed(entries, "tests_decide", ["T1"]) == ["T1"]
+
+
+def test_us7_undismissed_dismissals_accumulate_across_entries():
+    entries = [_review(), _dismiss("wrong", ["T1"]), _dismiss("overstated", ["T3"])]
+    assert graph.undismissed(entries, "tests_decide", ["T1", "T2", "T3"]) == ["T2"]
+
+
+def test_us7_undismissed_does_not_mutate_inputs():
+    entries = [_review(), _dismiss("wrong", ["T1"])]
+    fails = ["T1", "T2"]
+    graph.undismissed(entries, "tests_decide", fails)
+    assert fails == ["T1", "T2"] and len(entries) == 2

@@ -73,3 +73,26 @@ def back_rounds(entries: list[dict], target: str) -> int:
 def cap_reached(entries: list[dict], node: str) -> bool:
     """Return True when any back edge leaving `node` has reached ROUND_CAP rounds in `entries`."""
     return any(back_rounds(entries, t) >= ROUND_CAP for (n, _), t in BACK_EDGES.items() if n == node)
+
+
+def wrong_dismissals(entries: list[dict]) -> dict[str, int]:
+    """Count per pass the finding ids dismissed as "wrong" in decision entries; input is not mutated."""
+    counts: dict[str, int] = {}
+    for e in entries:
+        if e.get("decision") == "wrong":
+            for i in e["evidence"]["findings"]:
+                p = e["passes"][i]
+                counts[p] = counts.get(p, 0) + 1
+    return counts
+
+
+def undismissed(entries: list[dict], node: str, fails: list[str]) -> list[str]:
+    """Return the ids in `fails`, in order, not dismissed (wrong or overstated) at `node` since the last review entry."""
+    start = max((i + 1 for i, e in enumerate(entries) if "reviews" in e), default=0)
+    gone = {
+        f
+        for e in entries[start:]
+        if e.get("node") == node and e.get("decision") in ("wrong", "overstated")
+        for f in e["evidence"]["findings"]
+    }
+    return [f for f in fails if f not in gone]
