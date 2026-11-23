@@ -1,6 +1,6 @@
 # Third-party skills
 
-Installed as plugins (`.claude/settings.json`, pinned by commit):
+Installed as user skills in `~/.claude/skills` and agents in `~/.claude/agents` (copied from these repos on 2026-11-23):
 - `pstack` by Lauren Tan, from `cursor/plugins` (MIT, Copyright (c) 2026 Lauren Tan).
 - `show-me`, `visual-pr`, `improve-claude-md`, `rpi` by HumanLayer, from `humanlayer/skills` (MIT, Copyright (c) 2026 HumanLayer).
 

@@ -45,7 +45,7 @@ Every task gets a run folder `.claude/runs/<project>/<task-id>/` (git-ignored) h
 
 **Commit reviews.** Each new commit is reviewed on its own before the next commit is made, oldest first: `codex-reviewer` runs pass `commit` with `--commit <sha>` (the ask, the plan and the earlier commits give it the big picture). `principles` and `alternatives` run once per branch, in the branch finish, not per commit. A `CHANGES` verdict is decided per finding: *correct* is fixed in a later commit whose message names the fix (`X2: Fix C2 on 875bb0a: ...`); *wrong* or *overstated* is logged in the run folder's `decisions-log.md` with evidence (file:line and the quoted text that contradicts it). A FAIL without a quoted line is dropped.
 
-**Correction ratchet.** When the same correction or the same dismissal happens twice (in `decisions-log.md`, a review, or from me), the next commit on the branch makes it impossible: architecture first, then a ruff rule or a check in `slop_checks.py` or a hook, then a test, prose last (`pstack:correct`). A rubric criterion that a check now enforces is removed from the rubric in the same change. Keep the "Rule → what enforces it" table in CLAUDE.md current.
+**Correction ratchet.** When the same correction or the same dismissal happens twice (in `decisions-log.md`, a review, or from me), the next commit on the branch makes it impossible: architecture first, then a ruff rule or a check in `slop_checks.py` or a hook, then a test, prose last (`correct`). A rubric criterion that a check now enforces is removed from the rubric in the same change. Keep the "Rule → what enforces it" table in CLAUDE.md current.
 
 **Concurrency.** At most 3 subagents run at the same time, of any kind. The main orchestrator never has more than 3 running at once, whether decomposers, workflow orchestrators or any other. Each workflow orchestrator runs its own subagents one at a time.
 
@@ -65,17 +65,17 @@ Each checked plan then goes to the build. In Parallel mode the main orchestrator
 1. **Set up.** Work on the task's own branch, starting from dev's tip (section 4b). Write the plan files to the run folder and the eval cases to `evals/cases/`.
 2. **Unit loop, one plan subtask at a time.** The main session (or the workflow orchestrator) drives it and makes every commit; qa and the implementer never commit.
    1. **Lane.** The decomposer tags each subtask `fast` or `full`. Full: it changes a contract, a schema or migration, a risky seam (auth, network, an external service, deploy configuration) or security; everything else is fast. Full adds the light `tests` review after step 2 and the `impl` review after step 4.
-   2. **Tests first.** `qa` writes tests under `tests/` for the subtask, named after its story, testing behaviour through public contracts (`pstack:principle-test-behavior-not-implementation`). It runs them and confirms they fail for the expected reason. It returns only its result block.
+   2. **Tests first.** `qa` writes tests under `tests/` for the subtask, named after its story, testing behaviour through public contracts (`principle-test-behavior-not-implementation`). It runs them and confirms they fail for the expected reason. It returns only its result block.
    3. **Snapshot.** The main session records a hash of the test files qa wrote.
    4. **Implement until green.** `implementer` writes the code and iterates on its own until the unit's tests, the full suite, `ruff check` and `slop_checks.py` pass and the code fits the cap. It never edits tests; a test it believes is wrong stays failing and goes in `tests_disputed`. It returns only its result block.
    5. **Verify.** The main session checks the test-file hash is unchanged, reruns the suite itself, and decides any disputed test with evidence (*tests wrong*: quote the plan or ask line the test contradicts → back to qa; otherwise → back to the implementer).
    6. **Commit and review.** Commit (the hooks run the gates), then pass `commit` on that commit, then decide its findings (commit reviews above). Only then the next subtask.
    Stop after 3 rounds back to the same step within one subtask and report what blocks.
 3. **Branch finish.** After the last subtask:
-   1. **Subtract.** Run `deslop` and `pstack:no-comments` over the branch diff against the launch hash. Their edits are commits like any other (gates, `commit` review). Behaviour and tests stay the same.
+   1. **Subtract.** Run `deslop` and `no-comments` over the branch diff against the launch hash. Their edits are commits like any other (gates, `commit` review). Behaviour and tests stay the same.
    2. **Principles and alternatives,** once over the whole branch: `codex-reviewer` runs both with `--base <launch hash>` and no `--commit` on a clean tree. Decide findings as for commit reviews.
    3. **Full suite** once.
-4. **Writing.** Reports, PR descriptions and summaries for me follow `pstack:unslop`. A PR description follows the `visual-pr` shape: one-sentence why, 1–3 notes, a structural change outline. Plans and options are shown visually where that's clearer (`show-me`).
+4. **Writing.** Reports, PR descriptions and summaries for me follow `unslop`. A PR description follows the `visual-pr` shape: one-sentence why, 1–3 notes, a structural change outline. Plans and options are shown visually where that's clearer (`show-me`).
 5. **Run evals (only if the Evals flag is yes).** For each case: `eval-runner` plays the user, `~/Developing/scripts/eval_checks.py` runs the code checks, and `eval-judge` scores the run (section 5b).
 6. **Final review.** `codex-reviewer` runs pass `answers-ask` (GPT-6 Luna) with the launch hash as the base. It reads the plan, every commit's message and file stats, and each commit's verdict, not the diff, which was reviewed commit by commit.
 7. **Decide.**
