@@ -78,3 +78,10 @@ def test_pass_prompt_comes_from_workspace_unless_project_overrides(tmp_path):
     own.parent.mkdir(parents=True)
     own.write_text("project judge")
     assert cr.pass_prompt_path("judge", tmp_path) == own
+
+
+def test_principles_read_workspace_then_project_claude_md(tmp_path):
+    (tmp_path / "CLAUDE.md").write_text("project rule")
+    rules = cr.project_rules(tmp_path)
+    assert "Coding principles" in rules and rules.endswith("project rule")
+    assert cr.project_rules(cr.WORKSPACE).count("Coding principles") == 1

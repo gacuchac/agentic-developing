@@ -82,6 +82,12 @@ def pass_prompt_path(pass_name: str, project: Path) -> Path:
     return own if own.exists() else WORKSPACE / ".claude" / "review-passes" / f"{pass_name}.md"
 
 
+def project_rules(project: Path) -> str:
+    """The workspace CLAUDE.md (coding principles for all projects), then the project's own CLAUDE.md if any."""
+    paths = dict.fromkeys([WORKSPACE / "CLAUDE.md", project.resolve() / "CLAUDE.md"])
+    return "\n\n".join(text for text in (read_optional(str(p)) for p in paths) if text)
+
+
 def read_optional(path: str | None) -> str:
     """Return a file's text, or an empty string when no path or no file."""
     return Path(path).read_text() if path and Path(path).exists() else ""
@@ -173,7 +179,7 @@ def main() -> int:
         changes = commit_changes(args.commit, args.base)
     else:
         changes = collect_changes(args.base)
-    principles = read_optional("CLAUDE.md") if args.pass_name == "principles" else ""
+    principles = project_rules(Path.cwd()) if args.pass_name == "principles" else ""
     prompt = build_prompt(
         args.pass_name, read_optional(args.ask_file), read_optional(args.plan_file), principles, changes,
         context_files(args.context_file),
