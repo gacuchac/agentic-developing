@@ -1,4 +1,7 @@
-"""Pre-commit review gate: no new commit on a task branch until the previous one has a saved review (pure helpers only)."""
+"""Pre-commit review gate (pure helpers only).
+
+No new commit on a task branch until the previous one has a saved review.
+"""
 from __future__ import annotations
 
 import subprocess
@@ -31,12 +34,23 @@ def run_folder(common_dir: Path, task: str, workspace: Path) -> Path | None:
 
 
 def reviewed(folder: Path, sha: str) -> bool:
-    """Return True when any folder/review-commit-*.md names `sha` as its base (any verdict); a missing folder gives False."""
+    """Return True when any folder/review-commit-*.md names `sha` as its base.
+
+    Any verdict counts; a missing folder gives False.
+    """
     return any(f"base: commit {sha} " in f.read_text() for f in folder.glob("review-commit-*.md"))
 
 
 def needs_review(repo: Path) -> bool:
-    """Return True when HEAD is not on dev and has exactly one parent (a merge commit needs no review). Depends only on `repo`."""
-    off_dev = subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", "dev"], cwd=repo, capture_output=True, check=False).returncode != 0
-    parents = subprocess.run(["git", "rev-list", "--parents", "-n", "1", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout
+    """Return True when HEAD is not on dev and has exactly one parent.
+
+    A merge commit needs no review. Depends only on `repo`.
+    """
+    on_dev = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", "HEAD", "dev"], cwd=repo, capture_output=True, check=False
+    )
+    off_dev = on_dev.returncode != 0
+    parents = subprocess.run(
+        ["git", "rev-list", "--parents", "-n", "1", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout
     return off_dev and len(parents.split()) == 2

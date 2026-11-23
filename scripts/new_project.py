@@ -38,7 +38,10 @@ def write_files(root: Path, files: dict[str, str]) -> None:
 
 
 def init_repo(root: Path) -> None:
-    """git init on main, commit the scaffold (exempt from the cap as a first commit), create dev and uat, switch to dev."""
+    """git init on main, commit the scaffold, create dev and uat, switch to dev.
+
+    The scaffold commit is exempt from the cap as a first commit.
+    """
     steps = (
         ["init", "-q", "-b", "main"],
         ["add", "-A"],
@@ -52,6 +55,7 @@ def init_repo(root: Path) -> None:
 
 
 def main() -> int:
+    """Create a new project from the template from the command line; return the exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("name", help="folder name of the new project")
     parser.add_argument("description", help="one paragraph: what the project is")
