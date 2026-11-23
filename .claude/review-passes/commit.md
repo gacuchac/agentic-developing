@@ -6,4 +6,4 @@ Answer every criterion below, in order, as `<id>: PASS | FAIL | N/A — <evidenc
 - C2. The diff does what the message says, fully.
 - C3. The diff does nothing the message doesn't say.
 - C4. The goal is a step toward the ask and the plan, not a detour or a change the plan doesn't call for.
-- C5. No test gaming (hard-coded expected outputs, special-casing test inputs), and no test deleted, skipped or loosened.
+- C5. No test gaming (hard-coded expected outputs, special-casing test inputs), and no test deleted, skipped or loosened, unless the commit migrates callers to a new contract covered by an approved `architecture.md` and its message names each deleted test as protecting only the old implementation.
