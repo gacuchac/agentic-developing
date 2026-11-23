@@ -177,3 +177,118 @@ def test_us9_in_empty_quote_false_with_empty_texts():
 
 def test_us9_in_case_sensitive():
     assert evidence.quote_in(["Needle"], "needle") is False
+
+
+# check_evidence (US-9)
+FILES = {"a.py": make_text(l10="the quick brown fox")}
+
+
+def make_facts(fails=("T1", "T2"), capped=()):
+    return {"fails": list(fails), "capped": set(capped), "read": FILES.get}
+
+
+def wrong_item(id="T1", file="a.py", line=10, quote="quick brown"):
+    return {"id": id, "file": file, "line": line, "quote": quote}
+
+
+def check(option, findings, facts=None):
+    return evidence.check_evidence(option, {"findings": findings}, facts or make_facts())
+
+
+def test_us9_correct_good_returns_empty():
+    assert check("correct", ["T1", "T2"]) == []
+
+
+def test_us9_correct_unknown_id_fails():
+    errs = check("correct", ["T1", "ZZ9"])
+    assert errs and any("ZZ9" in e for e in errs)
+
+
+def test_us9_correct_empty_list_fails():
+    assert check("correct", [])
+
+
+def test_us9_correct_missing_findings_key_returns_errors():
+    assert evidence.check_evidence("correct", {}, make_facts())
+
+
+def test_us9_correct_several_unknown_ids_one_error_each():
+    errs = check("correct", ["X1", "X2", "T1"])
+    assert len(errs) >= 2
+    assert any("X1" in e for e in errs) and any("X2" in e for e in errs)
+
+
+def test_us9_overstated_good_returns_empty():
+    assert check("overstated", [{"id": "T1", "reason": "cosmetic only"}]) == []
+
+
+def test_us9_overstated_unknown_id_fails():
+    errs = check("overstated", [{"id": "ZZ9", "reason": "fine"}])
+    assert errs and any("ZZ9" in e for e in errs)
+
+
+def test_us9_overstated_empty_reason_fails():
+    errs = check("overstated", [{"id": "T1", "reason": ""}])
+    assert errs and any("T1" in e for e in errs)
+
+
+def test_us9_overstated_whitespace_reason_fails():
+    errs = check("overstated", [{"id": "T1", "reason": "  \t\n "}])
+    assert errs and any("T1" in e for e in errs)
+
+
+def test_us9_overstated_missing_findings_key_returns_errors():
+    assert evidence.check_evidence("overstated", {}, make_facts())
+
+
+def test_us9_overstated_several_bad_one_error_each():
+    errs = check("overstated", [{"id": "X1", "reason": "r"}, {"id": "T1", "reason": " "},
+                                {"id": "T2", "reason": "ok"}])
+    assert len(errs) >= 2
+    assert any("X1" in e for e in errs) and any("T1" in e for e in errs)
+
+
+def test_us9_wrong_good_returns_empty():
+    assert check("wrong", [wrong_item()]) == []
+
+
+def test_us9_wrong_unknown_id_fails():
+    errs = check("wrong", [wrong_item(id="ZZ9")])
+    assert errs and any("ZZ9" in e for e in errs)
+
+
+def test_us9_wrong_capped_id_fails_even_with_good_quote():
+    errs = check("wrong", [wrong_item()], make_facts(capped={"T1"}))
+    assert errs and any("T1" in e for e in errs)
+
+
+def test_us9_wrong_missing_file_fails():
+    errs = check("wrong", [wrong_item(file="nope.py")])
+    assert errs and any("nope.py" in e for e in errs)
+
+
+def test_us9_wrong_quote_2_lines_off_passes():
+    assert check("wrong", [wrong_item(line=12)]) == []
+    assert check("wrong", [wrong_item(line=8)]) == []
+
+
+def test_us9_wrong_quote_3_lines_off_fails():
+    assert check("wrong", [wrong_item(line=13)])
+    errs = check("wrong", [wrong_item(line=7)])
+    assert errs and any("a.py" in e or "T1" in e for e in errs)
+
+
+def test_us9_wrong_quote_absent_fails():
+    assert check("wrong", [wrong_item(quote="not in file")])
+
+
+def test_us9_wrong_missing_findings_key_returns_errors():
+    assert evidence.check_evidence("wrong", {}, make_facts())
+
+
+def test_us9_wrong_several_bad_one_error_each():
+    errs = check("wrong", [wrong_item(id="X1"), wrong_item(id="T2", file="nope.py"),
+                           wrong_item(id="T1", line=19)])
+    assert len(errs) >= 3
+    for k in ("X1", "nope.py"):
+        assert any(k in e for e in errs)
