@@ -56,3 +56,20 @@ def kind(node: str) -> str:
     if "escalate" in EDGES[node]:
         return "decide"
     return {"user": "user", "done": "end"}.get(node, "auto")
+
+
+def back_rounds(entries: list[dict], target: str) -> int:
+    """Count back-edge entries going to `target` after the last user_continue entry; input is not mutated."""
+    start = max(
+        (i + 1 for i, e in enumerate(entries) if "user_continue" in (e.get("decision"), e.get("outcome"))), default=0
+    )
+    return sum(
+        1
+        for e in entries[start:]
+        if (e.get("node"), e.get("decision") or e.get("outcome")) in BACK_EDGES and e.get("to") == target
+    )
+
+
+def cap_reached(entries: list[dict], node: str) -> bool:
+    """Return True when any back edge leaving `node` has reached ROUND_CAP rounds in `entries`."""
+    return any(back_rounds(entries, t) >= ROUND_CAP for (n, _), t in BACK_EDGES.items() if n == node)

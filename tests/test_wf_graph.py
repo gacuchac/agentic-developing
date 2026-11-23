@@ -215,3 +215,102 @@ def test_us7_back_edges_are_real_edges():
 def test_us7_decides_on_values_are_review_passes():
     for decide, review in graph.DECIDES_ON.items():
         assert review in graph.REVIEW_PASSES, decide
+
+
+def _back(node, decision, to):
+    return {"node": node, "decision": decision, "to": to}
+
+
+def _impl_back():
+    return _back("impl_decide", "correct", "implement")
+
+
+def _user_continue(to="implement"):
+    return {"node": "user", "decision": "user_continue", "to": to}
+
+
+def test_us7_two_back_rounds_do_not_cap_impl_decide():
+    entries = [_impl_back(), _impl_back()]
+    assert graph.cap_reached(entries, "impl_decide") is False
+
+
+def test_us7_three_back_rounds_cap_impl_decide():
+    entries = [_impl_back(), _impl_back(), _impl_back()]
+    assert graph.cap_reached(entries, "impl_decide") is True
+
+
+def test_us7_no_entries_means_no_cap():
+    assert graph.back_rounds([], "implement") == 0
+    assert graph.cap_reached([], "impl_decide") is False
+
+
+def test_us7_back_rounds_returns_exact_count():
+    for n in range(0, 6):
+        assert graph.back_rounds([_impl_back()] * n, "implement") == n
+
+
+def test_us7_forward_entries_do_not_count():
+    forward = {"node": "tests_review", "outcome": "PASS", "to": "implement"}
+    entries = [forward, forward, forward, _impl_back()]
+    assert graph.back_rounds(entries, "implement") == 1
+    assert graph.cap_reached(entries, "impl_decide") is False
+
+
+def test_us7_outcome_key_back_edges_count():
+    over = {"node": "count_lines", "outcome": "over", "to": "implement"}
+    assert graph.back_rounds([over, over], "implement") == 2
+
+
+def test_us7_user_continue_resets_the_count():
+    entries = [_impl_back()] * 3 + [_user_continue()]
+    assert graph.back_rounds(entries, "implement") == 0
+    assert graph.cap_reached(entries, "impl_decide") is False
+
+
+def test_us7_entries_after_user_continue_count():
+    entries = [_impl_back()] * 3 + [_user_continue()] + [_impl_back()] * 2
+    assert graph.back_rounds(entries, "implement") == 2
+    assert graph.cap_reached(entries, "impl_decide") is False
+    entries.append(_impl_back())
+    assert graph.cap_reached(entries, "impl_decide") is True
+
+
+def test_us7_only_last_user_continue_resets():
+    entries = [_impl_back(), _user_continue(), _impl_back(), _impl_back(),
+               _user_continue(), _impl_back()]
+    assert graph.back_rounds(entries, "implement") == 1
+
+
+def test_us7_count_lines_over_three_times_caps_count_lines():
+    over = {"node": "count_lines", "outcome": "over", "to": "implement"}
+    assert graph.cap_reached([over, over], "count_lines") is False
+    assert graph.cap_reached([over, over, over], "count_lines") is True
+
+
+def test_us7_rounds_to_implement_pool_across_nodes():
+    entries = [
+        _impl_back(),
+        _back("fail_decide", "code_wrong", "implement"),
+        {"node": "count_lines", "outcome": "over", "to": "implement"},
+    ]
+    assert graph.back_rounds(entries, "implement") == 3
+    assert graph.cap_reached(entries, "impl_decide") is True
+
+
+def test_us7_back_edge_to_other_target_does_not_count():
+    to_qa = [_back("tests_decide", "correct", "qa_write")] * 3
+    assert graph.back_rounds(to_qa, "implement") == 0
+    assert graph.back_rounds(to_qa, "qa_write") == 3
+    assert graph.cap_reached(to_qa, "impl_decide") is False
+    assert graph.cap_reached(to_qa, "tests_decide") is True
+
+
+def test_us7_cap_reached_false_for_node_without_back_edges():
+    entries = [_impl_back()] * 5
+    assert graph.cap_reached(entries, "commit") is False
+
+
+def test_us7_cap_reached_any_back_edge_of_node_triggers():
+    entries = [_back("tests_decide", "correct", "qa_write")] * 3
+    assert graph.cap_reached(entries, "fail_decide") is True
+    assert graph.cap_reached(entries, "red_decide") is True
