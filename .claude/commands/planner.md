@@ -1,6 +1,6 @@
 ---
 description: Plan a new product or large feature in six steps, from research to PRD, checking in after every step
-argument-hint: <task-id> <description of the product or feature>
+argument-hint: <project>/<task-id> <description of the product or feature>
 disable-model-invocation: true
 ---
 

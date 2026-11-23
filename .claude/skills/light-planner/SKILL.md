@@ -1,7 +1,7 @@
 ---
 name: light-planner
 description: Light, interview-mode planning in three steps (scope and options, test and choose, solution and PRD) that takes minutes instead of hours. Use when the user says "light planner", "light plan", "quick plan", "interview planning", or asks for a short or fast version of planning for a time-boxed demo. Not for the full six-step /planner.
-argument-hint: <task-id> <description of the product or feature>
+argument-hint: <project>/<task-id> <description of the product or feature>
 ---
 
 Task-id and request: if I gave a task-id, use it; otherwise make a short one from my request and tell me what it is. Planning folder: .claude/runs/<task-id>/planner/

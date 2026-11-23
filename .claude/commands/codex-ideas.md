@@ -1,6 +1,6 @@
 ---
 description: Get bold, unconventional approaches from the wild-card agent (GPT-6 Sol), then rate them on merit
-argument-hint: <task-id>
+argument-hint: <project>/<task-id>
 disable-model-invocation: true
 ---
 

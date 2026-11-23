@@ -1,6 +1,6 @@
 ---
 description: Build a planned product or large feature from its PRD, with just-in-time decomposition
-argument-hint: <planner task-id>
+argument-hint: <project>/<planner task-id>
 disable-model-invocation: true
 ---
 

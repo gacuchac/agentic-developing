@@ -1,6 +1,6 @@
 ---
 description: Run one Codex review pass on the current changes
-argument-hint: <plan|commit|principles|alternatives|answers-ask|pr> <task-id> [<commit sha or base>]
+argument-hint: <plan|commit|principles|alternatives|answers-ask|pr> <project>/<task-id> [<commit sha or base>]
 disable-model-invocation: true
 ---
 

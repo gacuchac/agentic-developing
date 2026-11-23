@@ -1,6 +1,6 @@
 ---
 description: Write eval cases for a task with me, one case at a time
-argument-hint: <task-id>
+argument-hint: <project>/<task-id>
 disable-model-invocation: true
 ---
 
