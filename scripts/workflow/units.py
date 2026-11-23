@@ -25,3 +25,18 @@ def plan_units(plan: str) -> list[str]:
 def fix_text(unit: str, fix: str, lines: list[str]) -> str:
     """Return unit's first line, `Fix: {fix}`, then lines, newline-joined with no trailing newline."""
     return "\n".join([unit.splitlines()[0], "Fix: " + fix, *lines])
+
+
+def commit_message(unit_md: str) -> str:
+    """Return the commit message for a unit's text: `<stories>: <title>`, or the title alone.
+
+    Reads the first `### n. <title> (<stories>)` line; stories are the last parentheses.
+    When the next line is `Fix: <fix>`, returns `<stories>: Fix <fix>: <title>`.
+    """
+    lines = unit_md.splitlines()
+    head = _HEAD.sub("", lines[0])
+    found = re.fullmatch(r"(.*) \(([^()]*)\)\s*", head)
+    title, stories = (found.group(1), found.group(2)) if found else (head.strip(), "")
+    fix = lines[1][5:] if len(lines) > 1 and lines[1].startswith("Fix: ") else ""
+    body = f"Fix {fix}: {title}" if fix else title
+    return f"{stories}: {body}" if stories else body

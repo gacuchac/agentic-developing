@@ -156,3 +156,47 @@ def test_us6_fix_text_keeps_every_line_in_order():
 
 def test_us6_fix_text_no_lines_is_heading_and_fix_line():
     assert units.fix_text("### 1. x (US-1)\nbody", "p 1 on s", []) == "### 1. x (US-1)\nFix: p 1 on s"
+
+
+UNIT3 = """### 3. graph.py: edges of the unit loop (US-7)
+Estimate: ~10 lines.
+
+Contracts:
+- something (not a story)
+"""
+
+
+def test_us10_commit_message_plan_unit():
+    assert units.commit_message(UNIT3) == "US-7: graph.py: edges of the unit loop"
+
+
+def test_us10_commit_message_keeps_multiple_stories_whole():
+    md = "### 5. a.py: two things (US-9, US-10)\nBody."
+    assert units.commit_message(md) == "US-9, US-10: a.py: two things"
+
+
+def test_us10_commit_message_fix_unit():
+    md = units.fix_text(UNIT3, "principles P4 on abc1234", ["detail line"])
+    assert units.commit_message(md) == (
+        "US-7: Fix principles P4 on abc1234: graph.py: edges of the unit loop"
+    )
+
+
+def test_us10_commit_message_last_parentheses_are_the_stories():
+    md = "### 4. graph.py: kinds (and tables) (US-7)\nBody."
+    assert units.commit_message(md) == "US-7: graph.py: kinds (and tables)"
+
+
+def test_us10_commit_message_6b_heading():
+    md = "### 6b. review.py: extra (US-3)\nBody of 6b."
+    assert units.commit_message(md) == "US-3: review.py: extra"
+
+
+def test_us10_commit_message_no_parentheses_gives_title_alone():
+    md = "### 7. misc.py: no stories\nBody."
+    assert units.commit_message(md) == "misc.py: no stories"
+
+
+def test_us10_commit_message_ignores_body_lines():
+    md = "### 3. graph.py: edges (US-7)\nNote (US-99) here\nFix: not directly after\nmore"
+    assert units.commit_message(md) == "US-7: graph.py: edges"
