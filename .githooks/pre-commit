@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Git pre-commit hook for every repo under Developing/: the commit cap, then ruff and slop checks.
+"""Git pre-commit hook for every repo under Developing/: the line cap, lint and slop checks, then the review gate.
 
 Runs the workspace's own scripts, found next to this hook, in the committing repo.
 """
@@ -8,5 +8,6 @@ import sys
 from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parents[1] / "scripts" / "hooks"
-failed = [subprocess.call([sys.executable, str(HOOKS / name)]) for name in ("commit_cap.py", "lint_gate.py")]
+CHECKS = ("commit_cap.py", "lint_gate.py", "review_gate.py")
+failed = [subprocess.call([sys.executable, str(HOOKS / name)]) for name in CHECKS]
 sys.exit(1 if any(failed) else 0)

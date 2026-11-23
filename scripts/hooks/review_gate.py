@@ -5,6 +5,7 @@ No new commit on a task branch until the previous one has a saved review.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[2]
@@ -54,3 +55,29 @@ def needs_review(repo: Path) -> bool:
         ["git", "rev-list", "--parents", "-n", "1", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
     ).stdout
     return off_dev and len(parents.split()) == 2
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def main(workspace: Path = WORKSPACE) -> int:
+    """Return 1 and print a blocking message when HEAD of the current task branch has no saved review, else 0."""
+    branch = _git("rev-parse", "--abbrev-ref", "HEAD")
+    task = task_id(branch)
+    if task is None or not needs_review(Path.cwd()):
+        return 0
+    folder = run_folder(Path(_git("rev-parse", "--path-format=absolute", "--git-common-dir")), task, workspace)
+    short = _git("rev-parse", "--short", "HEAD")
+    if folder is None or any(reviewed(folder, sha) for sha in (_git("rev-parse", "HEAD"), short)):
+        return 0
+    print(
+        f"Commit blocked: HEAD {short} on {branch} has no saved commit review in {folder}. "
+        f"Review it first: python3 ~/Developing/scripts/codex_review.py commit --commit {short} ...",
+        file=sys.stderr,
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

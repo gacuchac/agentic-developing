@@ -144,3 +144,77 @@ def test_us2_needs_review_uses_repo_arg_not_cwd(repo, tmp_path_factory, monkeypa
     elsewhere = tmp_path_factory.mktemp("elsewhere")
     monkeypatch.chdir(elsewhere)
     assert gate.needs_review(repo) is True
+
+
+@pytest.fixture
+def ws_project(tmp_path, monkeypatch):
+    ws = tmp_path.resolve() / "Developing"
+    proj = ws / "proj"
+    proj.mkdir(parents=True)
+    monkeypatch.chdir(proj)
+    _git("init", "-b", "dev")
+    _git("config", "user.name", "t")
+    _git("config", "user.email", "t@example.com")
+    _git("config", "commit.gpgsign", "false")
+    _commit("base")
+    _git("checkout", "-b", "feature/x")
+    return ws
+
+
+def _short():
+    out = subprocess.run(["git", "rev-parse", "--short", "HEAD"], check=True, capture_output=True, text=True)
+    return out.stdout.strip()
+
+
+def _save_review(ws, short, task="x"):
+    folder = ws / ".claude" / "runs" / "proj" / task
+    folder.mkdir(parents=True)
+    (folder / "review-commit-1.md").write_text(
+        f"<!-- pass: commit | model: m | base: commit {short} | exit: 0 | 2026-01-01 00:00:00 -->\nVERDICT: FAIL\n"
+    )
+
+
+def test_us6_gate_blocks_unreviewed_head_commit(ws_project, capsys):
+    _commit("own")
+    assert gate.main(ws_project) == 1
+    err = capsys.readouterr().err
+    assert "Commit blocked" in err
+    assert _short() in err
+    assert "feature/x" in err
+
+
+def test_us6_gate_passes_when_head_commit_is_reviewed(ws_project):
+    _commit("own")
+    _save_review(ws_project, _short())
+    assert gate.main(ws_project) == 0
+
+
+def test_us6_gate_blocks_when_only_an_older_commit_is_reviewed(ws_project):
+    _commit("own")
+    _save_review(ws_project, _short())
+    _commit("second")
+    assert gate.main(ws_project) == 1
+
+
+def test_us6_gate_passes_first_commit_on_fresh_branch(ws_project):
+    assert gate.main(ws_project) == 0
+
+
+def test_us6_gate_passes_on_non_task_branch(ws_project):
+    _git("checkout", "-b", "scratch")
+    _commit("own")
+    assert gate.main(ws_project) == 0
+
+
+def test_us6_gate_passes_when_head_is_merge_commit(ws_project):
+    _commit("own")
+    _git("checkout", "dev")
+    _commit("newdev")
+    _git("checkout", "feature/x")
+    _git("merge", "--no-ff", "-m", "merge dev", "dev")
+    assert gate.main(ws_project) == 0
+
+
+def test_us6_gate_passes_when_repo_is_outside_workspace(ws_project, tmp_path):
+    _commit("own")
+    assert gate.main(tmp_path / "other-workspace") == 0
