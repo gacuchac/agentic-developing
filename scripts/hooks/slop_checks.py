@@ -51,6 +51,20 @@ def imported_modules(node: ast.AST) -> list[str]:
     return []
 
 
+def hidden_state(source: str) -> list[Finding]:
+    """Return (line, SLOP002 message) for global/nonlocal statements and functions that mutate module-level names."""
+    tree = ast.parse(source)
+    module_names = module_level_names(tree)
+    findings = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Global, ast.Nonlocal)):
+            names = ", ".join(node.names)
+            findings.append((node.lineno, mutation_message(names)))
+        if isinstance(node, FUNCTION_NODES):
+            findings.extend(function_mutations(node, module_names))
+    return sorted(set(findings))
+
+
 def mutation_message(name: str) -> str:
     """Return the SLOP002 message for a function that mutates module state name."""
     return f"SLOP002 function mutates module state {name}: pass it in and return the result"
@@ -135,3 +149,15 @@ def mutated_name(node: ast.AST) -> str | None:
         if name is not None:
             return name
     return None
+
+
+def function_mutations(function: ast.FunctionDef | ast.AsyncFunctionDef, module_names: set[str]) -> list[Finding]:
+    """Return SLOP002 findings for writes inside function to module-level names it does not bind locally."""
+    nodes = own_nodes(function)
+    local = local_names(function, nodes)
+    findings = []
+    for node in nodes:
+        name = mutated_name(node)
+        if name in module_names and name not in local:
+            findings.append((node.lineno, mutation_message(name)))
+    return findings
