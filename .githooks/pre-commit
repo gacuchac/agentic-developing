@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Git pre-commit hook: block commits over 30 changed lines (scripts/hooks/commit_cap.py)."""
+import subprocess
+import sys
+
+sys.exit(subprocess.call([sys.executable, "scripts/hooks/commit_cap.py"]))

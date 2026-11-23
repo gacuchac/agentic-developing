@@ -1,0 +1,45 @@
+{
+  "env": {
+    "CODEX_SOL_MODEL": "gpt-6-sol",
+    "CODEX_LUNA_MODEL": "gpt-6-luna"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python3 scripts/codex_review.py *)",
+      "Bash(python3 -m pytest *)",
+      "Bash(python3 -m harness *)",
+      "Bash(python3 scripts/eval_checks.py *)",
+      "Bash(git diff *)",
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(git fetch *)",
+      "Bash(git rev-parse *)",
+      "Bash(git merge-base *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch -m *)",
+      "Bash(git merge *)",
+      "Bash(git push -u origin feature/*)",
+      "Bash(git push -u origin bugfix/*)",
+      "Bash(git push -u origin hotfix/*)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh pr merge *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}\"/scripts/hooks/post_edit.py",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

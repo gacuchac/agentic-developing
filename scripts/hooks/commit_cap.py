@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""Pre-commit check: block a commit whose staged changes exceed MAX_LINES changed lines."""
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+MAX_LINES = 30
+
+
+def file_counts(numstat: str) -> dict[str, int]:
+    """Changed lines per file from `git diff --numstat` output.
+
+    Each file counts max(added, deleted), so editing one line counts 1. A pure
+    rename counts 0 and a binary file ("-" in numstat) counts 1.
+    """
+    counts: dict[str, int] = {}
+    for line in filter(None, numstat.splitlines()):
+        added, deleted, path = line.split("\t", 2)
+        counts[path] = 1 if added == "-" else max(int(added), int(deleted))
+    return counts
+
+
+def count_changed_lines(numstat: str) -> int:
+    """Total changed lines over all files, counted as in file_counts."""
+    return sum(file_counts(numstat).values())
+
+
+def git(*args: str) -> str:
+    """Run a git command in the current repo and return stdout."""
+    return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
+
+
+def merge_in_progress(git_dir: Path) -> bool:
+    """True while git is finishing a merge, which the cap exempts."""
+    return (git_dir / "MERGE_HEAD").exists()
+
+
+def main() -> int:
+    """Exit 0 when the staged changes fit in MAX_LINES (or finish a merge), else list them and exit 1."""
+    if merge_in_progress(Path(git("rev-parse", "--git-dir").strip())):
+        return 0
+    counts = file_counts(git("diff", "--cached", "--numstat", "-M"))
+    if sum(counts.values()) <= MAX_LINES:
+        return 0
+    lines = "\n".join(f"  {n:4d}  {path}" for path, n in counts.items())
+    print(f"Commit blocked: {sum(counts.values())} changed lines, limit {MAX_LINES}.\n{lines}\n"
+          "Split it into smaller commits, each achieving one thing.", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
