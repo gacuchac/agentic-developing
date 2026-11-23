@@ -5,10 +5,10 @@
   },
   "permissions": {
     "allow": [
-      "Bash(python3 scripts/codex_review.py *)",
+      "Bash(python3 ~/Developing/scripts/codex_review.py *)",
       "Bash(python3 -m pytest *)",
       "Bash(python3 -m harness *)",
-      "Bash(python3 scripts/eval_checks.py *)",
+      "Bash(python3 ~/Developing/scripts/eval_checks.py *)",
       "Bash(git diff *)",
       "Bash(git status *)",
       "Bash(git log *)",
@@ -17,7 +17,7 @@
       "Bash(git merge-base *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git branch -m *)",
+      "Bash(git switch *)",
       "Bash(git merge *)",
       "Bash(git push -u origin feature/*)",
       "Bash(git push -u origin bugfix/*)",
@@ -25,7 +25,11 @@
       "Bash(gh pr create *)",
       "Bash(gh pr view *)",
       "Bash(gh pr checks *)",
-      "Bash(gh pr merge *)"
+      "Bash(gh pr merge *)",
+      "Bash(.venv/bin/python -m pytest *)",
+      "Bash(git pull --ff-only*)",
+      "Bash(git -C * worktree add *)",
+      "Bash(git -C * worktree remove *)"
     ]
   },
   "hooks": {
