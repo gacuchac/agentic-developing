@@ -39,7 +39,7 @@ def test_us8_rubric_ids_of_commit_md():
 
 def test_us8_rubric_ids_of_principles_md():
     ids = review.rubric_ids((PASSES / "principles.md").read_text())
-    assert ids == ["P1", "P2", "P3", "P4", "P5", "P6"]
+    assert ids == ["P1", "P3", "P5", "P6"]
 
 
 def test_us8_rubric_ids_only_matches_dash_id_dot_lines_in_order():
