@@ -1,6 +1,6 @@
 ---
 name: light-build
-description: Light, interview-mode build of one feature or bug (one decomposer, two human checkpoints, a review of each commit plus one answers-ask pass, one fix round) for a time-boxed demo. Use when the user says "light build", "quick build", "interview build" or "build it light". Not for the full Mode A, B or C loop.
+description: Light, interview-mode build of one feature or bug (one decomposer, two human checkpoints, a review of each commit plus one answers-ask pass, one fix round) for a time-boxed demo. Use when the user says "light build", "quick build", "interview build" or "build it light". Not for the full Simple, Parallel or Sequential loop.
 argument-hint: <feature or bug description>
 ---
 

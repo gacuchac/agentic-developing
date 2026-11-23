@@ -1,6 +1,6 @@
 ---
 name: workflow-orchestrator
-description: Builds ONE checked plan in its own git worktree - tests, implementation, test runs, evals and reviews. Use only for Mode B tasks the main orchestrator has already decomposed and cross-checked.
+description: Builds ONE checked plan in its own git worktree - tests, implementation, test runs, evals and reviews. Use only for Parallel mode tasks the main orchestrator has already decomposed and cross-checked.
 tools: Agent, Read, Write, Grep, Glob, Bash
 model: opus
 color: purple

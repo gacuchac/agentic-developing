@@ -4,7 +4,7 @@
 
 The main orchestrator classifies every task before doing anything else and states the classification in one line.
 
-**Mode A: Simple.** All of these are true:
+**Simple mode.** All of these are true:
 - touches one or at most two files,
 - needs no architectural change and no change to any function's input or output contract,
 - is easy to test (a few small tests at most),
@@ -12,26 +12,26 @@ The main orchestrator classifies every task before doing anything else and state
 
 Route: on the task's own branch off `dev` (section 4b): `implementer`, committing by the commit cadence (section 4) → `qa` runs tests → `codex-reviewer` passes `commit` and `principles` on each commit, then `answers-ask` → done, or one fix round → PR into `dev`, reviewed as a whole by pass `pr` → merged.
 
-**Mode B: Complex and parallelizable.** The task can be split into pieces that can be built at the same time: no piece changes a function or contract that another piece changes or relies on. Pieces that touch the same file in different functions count as independent. Clearly defined and easy to evaluate, even if it touches many files.
+**Parallel mode** (complex, splits into independent pieces). The task can be split into pieces that can be built at the same time: no piece changes a function or contract that another piece changes or relies on. Pieces that touch the same file in different functions count as independent. Clearly defined and easy to evaluate, even if it touches many files.
 
 Route: the build loop in section 4. The main orchestrator splits the work into tasks, calls a decomposer for each one that's ready and cross-checks the plans. It then hands each checked plan to its own `workflow-orchestrator`, which builds it in its own git worktree, with at most 3 subagents running at once. When they finish, the main orchestrator merges each branch into `dev` by PR, resolving any conflicts itself, and runs a final `pr` review over the merged result, plus a board check.
 
-**Mode C: Complex, not parallelizable, or sensitive.** Any of these is true:
+**Sequential mode** (complex and connected, or sensitive). Any of these is true:
 - the pieces have dependencies on each other,
 - it needs an architectural or contract change,
 - I said it is sensitive or I want to watch it.
 
 Route: the same build loop, but after planning, the main session builds each task itself, one at a time and step by step, on the task's branch in the main checkout, calling each subagent directly. This keeps every subagent visible in the main conversation and in the VS Code agent map, so I can open each trace.
 
-**Overrides.** If my request starts with `simple:`, `parallel:` or `sequential:`, use Mode A, B or C respectively without classifying.
+**Overrides.** If my request starts with `simple:`, `parallel:` or `sequential:`, use Simple, Parallel or Sequential mode respectively without classifying.
 
-**Escalation.** No subagent ever changes the architecture on its own, whether the solution architecture or the software architecture; a change to any function's input or output contract counts. A subagent that finds it needs one follows the architecture stop rule in section 4: it writes the proposed change to a file in the run folder and stops. The main session then brings the change to me before anything goes on. Once I've decided, that work moves to Mode C, where the main session loads the `architecture` skill. In Mode B, a workflow orchestrator that hits this stops and reports back, because the change may affect the other parallel tasks.
+**Escalation.** No subagent ever changes the architecture on its own, whether the solution architecture or the software architecture; a change to any function's input or output contract counts. A subagent that finds it needs one follows the architecture stop rule in section 4: it writes the proposed change to a file in the run folder and stops. The main session then brings the change to me before anything goes on. Once I've decided, that work moves to Sequential mode, where the main session loads the `architecture` skill. In Parallel mode, a workflow orchestrator that hits this stops and reports back, because the change may affect the other parallel tasks.
 
 **Before routing.** For a new product or a large feature, I may run `/planner` first. Its PRD lists the big architectural tasks with their dependencies; `/build` then builds them with the loop in section 4, decomposing each task only once the tasks it depends on are merged.
 
-## 4. The build loop (Mode B and Mode C)
+## 4. The build loop (Parallel and Sequential modes)
 
-There are two kinds of orchestrator. The **main orchestrator** is the main session: it talks to me, plans every task, cross-checks the plans and merges the results. A **workflow orchestrator** owns one git worktree and builds one checked plan there. In Mode C the main session does that building itself.
+There are two kinds of orchestrator. The **main orchestrator** is the main session: it talks to me, plans every task, cross-checks the plans and merges the results. A **workflow orchestrator** owns one git worktree and builds one checked plan there. In Sequential mode the main session does that building itself.
 
 **Workspace and projects.** Sessions run from the workspace root `~/Developing`, which holds this workflow; each project is a subfolder with its own repo. A task is named `<project>/<task-id>` (for example `task-scheduler/sched-2`); its branches use the task-id alone. Paths here are relative to the root. A subagent working inside a project or worktree uses them as `~/Developing/<path>`, and calls the scripts as `python3 ~/Developing/scripts/<script>` from inside the project or worktree. Git commands run in the project, never in the root (unless the task is about the workflow itself).
 
@@ -52,9 +52,9 @@ Every task gets a run folder `.claude/runs/<project>/<task-id>/` (git-ignored) h
 5. **Review each plan.** `codex-reviewer` runs pass `plan` (GPT-6 Sol). If the verdict is `CHANGES`, send the findings back to `decomposer` once, and cross-check that plan again if it changed.
 6. **Create evals (only if the Evals flag is yes).** The main session writes the eval cases with me, using `/eval-create` (section 5b). They stay in the task's run folder until the task is built.
 
-Each checked plan then goes to the build. In Mode B the main orchestrator first creates the task's worktree from the project's `dev`: `git -C <project> worktree add ~/Developing/.worktrees/<project>/<task-id> -b feature/<task-id> dev` (`bugfix/` for a bug). It then hands the plan to a new `workflow-orchestrator`, with the worktree's absolute path, the branch, the launch hash, the full text of `ask.md`, `plan.md`, any approved `architecture.md` and the eval cases. In Mode C the main session builds it, one task at a time.
+Each checked plan then goes to the build. In Parallel mode the main orchestrator first creates the task's worktree from the project's `dev`: `git -C <project> worktree add ~/Developing/.worktrees/<project>/<task-id> -b feature/<task-id> dev` (`bugfix/` for a bug). It then hands the plan to a new `workflow-orchestrator`, with the worktree's absolute path, the branch, the launch hash, the full text of `ask.md`, `plan.md`, any approved `architecture.md` and the eval cases. In Sequential mode the main session builds it, one task at a time.
 
-### Build (a workflow orchestrator in Mode B, the main session in Mode C)
+### Build (a workflow orchestrator in Parallel mode, the main session in Sequential mode)
 
 1. **Set up.** Work on the task's own branch, starting from dev's tip (section 4b). Write the plan files to the run folder and the eval cases to `evals/cases/`.
 2. **Write tests.** `qa` writes tests for the plan under `tests/`, each named after the user story it checks, and confirms they fail for the right reason. It commits them by the commit cadence.
@@ -72,7 +72,7 @@ Stop after **3** rounds through step 7 and report to me with what is blocking, r
 
 ### Merge (main orchestrator)
 
-For each finished task, one branch at a time, working in that task's worktree (Mode B) or the main checkout (Mode C):
+For each finished task, one branch at a time, working in that task's worktree (Parallel mode) or the main checkout (Sequential mode):
 
 1. Fetch and merge the latest dev into the branch. The main orchestrator resolves any conflict itself. If a conflict can only be resolved by changing a contract or the architecture, it applies the architecture stop rule.
 2. `qa` runs the full suite on the branch.
@@ -81,7 +81,7 @@ For each finished task, one branch at a time, working in that task's worktree (M
 
 When every task launched together is merged, review the combined result in two parts. **Board check** (the main orchestrator, no model): every task launched together is marked merged on the board, and each one's own `answers-ask` and `pr` reviews ended in `PASS` or a fix. **Cross-task review:** `codex-reviewer` runs pass `pr` (GPT-6 Sol) on `dev` with `--base <launch hash>`, `--ask-file` the top-level `ask.md` and `--plan-file` the `build-board.md`, looking for problems between tasks: duplication, clashing contracts, one task undoing another. A `CHANGES` verdict becomes a new `bugfix/` task on the board. Then the board's newly ready tasks go back to Plan.
 
-**Architecture stop rule (every subagent).** If any subagent finds it needs to change the architecture, whether the solution architecture or the software architecture (a public function's input or output contract counts), it does not make the change. It writes the proposed change to `architecture-change-<agent name>.md` in the run folder (what must change, why, what it affects, and the options it sees), stops, and reports `ARCHITECTURE CHANGE: <path to that file>`. A workflow orchestrator that receives that report, or that finds a review finding needs an architecture change, stops its loop and reports the same line to the main session. The main session then shows me the file and waits for my decision. Until I decide, it starts no new work on that task and merges nothing from Mode B.
+**Architecture stop rule (every subagent).** If any subagent finds it needs to change the architecture, whether the solution architecture or the software architecture (a public function's input or output contract counts), it does not make the change. It writes the proposed change to `architecture-change-<agent name>.md` in the run folder (what must change, why, what it affects, and the options it sees), stops, and reports `ARCHITECTURE CHANGE: <path to that file>`. A workflow orchestrator that receives that report, or that finds a review finding needs an architecture change, stops its loop and reports the same line to the main session. The main session then shows me the file and waits for my decision. Until I decide, it starts no new work on that task and merges nothing from Parallel mode.
 
 ## 4b. Branches and environments
 
@@ -92,7 +92,7 @@ When every task launched together is merged, review the combined result in two p
 | `dev` | dev | `feature/*`, `bugfix/*` or `hotfix/*`, by PR |
 
 - Nothing is committed to `main`, `uat` or `dev` directly. Everything arrives by PR.
-- Every task works on its own branch off an up-to-date `dev`: `feature/<task-id>` for a feature, `bugfix/<task-id>` for a bug, and `hotfix/<task-id>` only when I call it a hotfix. In Mode B, each workflow orchestrator's worktree is its task's branch.
+- Every task works on its own branch off an up-to-date `dev`: `feature/<task-id>` for a feature, `bugfix/<task-id>` for a bug, and `hotfix/<task-id>` only when I call it a hotfix. In Parallel mode, each workflow orchestrator's worktree is its task's branch.
 - Before any work starts, the project's main checkout must be on `dev`, clean and up to date: `cd <project> && git switch dev`, `git status --porcelain` printing nothing, then `git pull --ff-only`. If there are uncommitted changes, stop and ask me what to do with them; never commit them to `dev`. The launch hash is `dev`'s tip after the pull (`git rev-parse HEAD`).
 - Use merge commits (`gh pr merge --merge`), never squash or rebase merges, so the histories of `dev`, `uat` and `main` stay compatible.
 - Agents may, on their own: merge a task's PR into `dev` once its checks pass (`gh pr create --base dev --fill`, `gh pr checks --watch`, `gh pr merge --merge`); promote `dev` to `uat` with a PR from `dev` into `uat`, merged once its checks pass; and send a hotfix to `uat` with a PR from its `hotfix/` branch, as well as to `dev`.

@@ -16,7 +16,7 @@ Write tests mode:
 
 Run tests mode:
 - During the loop, run the new and affected tests first, inside the project or worktree: `cd <path> && .venv/bin/python -m pytest -q <test files>` (`python3 -m pytest` if the project has no `.venv`). Use `set -o pipefail` if you pipe the output.
-- When they pass, or when asked for the full suite (before the final review, and after a Mode B merge), run the whole suite the same way, without test files.
+- When they pass, or when asked for the full suite (before the final review, and after a Parallel mode merge), run the whole suite the same way, without test files.
 - Report pass/fail counts and the full output of each failure. Do not fix anything.
 
 You cover unit and regression tests of the code and of the eval harness. You don't write, run or judge evals.

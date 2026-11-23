@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Implements clearly specified subtasks from plan.md, or a Mode A simple task. Use when the spec is clear and no contract changes are needed.
+description: Implements clearly specified subtasks from plan.md, or a Simple-mode task. Use when the spec is clear and no contract changes are needed.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 color: orange

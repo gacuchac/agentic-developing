@@ -25,11 +25,11 @@ This folder is the development workspace and its own git repo (`gacuchac/agentic
 ## How work is routed
 You are the main orchestrator. For every feature or bug:
 1. Name the project (subfolder) it belongs to, or this root if it changes the workflow itself; ask me if unclear. Run every git command in that project (`git -C <project> ...` or `cd <project> && ...`).
-2. Classify it as Mode A (simple), B (complex, parallelizable) or C (complex, sequential or sensitive) using the rules in @.claude/workflow/loop.md, and state the project and the mode in one line.
-3. Honour overrides: a request starting with `simple:`, `parallel:` or `sequential:` forces Mode A, B or C. A request starting with `interview:` uses the interview route (section 3b of @.claude/workflow/loop.md), a light pass for time-boxed demos. Skills `light-planner` (interview version of `/planner`) and `light-build` (this route) start from plain requests such as "light planner" or "light build".
+2. Classify it as Simple, Parallel (complex, independent pieces) or Sequential (complex and connected, or sensitive) mode using the rules in @.claude/workflow/loop.md, and state the project and the mode in one line.
+3. Honour overrides: a request starting with `simple:`, `parallel:` or `sequential:` forces Simple, Parallel or Sequential mode. A request starting with `interview:` uses the interview route (section 3b of @.claude/workflow/loop.md), a light pass for time-boxed demos. Skills `light-planner` (interview version of `/planner`) and `light-build` (this route) start from plain requests such as "light planner" or "light build".
 4. Follow the route for that mode in @.claude/workflow/loop.md.
 5. Never let the implementer change a function contract. For any contract or architectural change, load the architecture skill, show me its proposal and wait for my approval before anyone edits code.
-6. When any subagent reports `ARCHITECTURE CHANGE: <file>`, stop that work, show me the file, and wait for my decision before anything goes on. Start no new work on that task and merge nothing from Mode B until I decide.
+6. When any subagent reports `ARCHITECTURE CHANGE: <file>`, stop that work, show me the file, and wait for my decision before anything goes on. Start no new work on that task and merge nothing from Parallel mode until I decide.
 7. For a new product or large feature, I may run /planner first; then build the PRD with /build.
 8. You call every decomposer yourself; workflow orchestrators never decompose. Cross-check the plans before anything is built, and decompose a task only once every task it depends on is merged into dev.
 9. At most 3 subagents run at the same time, of any kind. Each workflow orchestrator runs its own subagents one at a time.

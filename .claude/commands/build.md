@@ -16,7 +16,7 @@ Before each round, check that the main checkout is on dev, clean and up to date 
 Then repeat the build loop in .claude/workflow/loop.md until every task is merged or blocked:
 1. Mark ready every waiting task whose dependencies are all merged into dev. Plan only ready tasks.
 2. Plan: decompose the ready tasks, at most 3 at a time, cross-check the plans against each other and against tasks still building, review them, and write eval cases with me where flagged.
-3. Build: launch one workflow orchestrator per checked plan, never more than 3 subagents at once. Build Mode C tasks in this session, one at a time.
+3. Build: launch one workflow orchestrator per checked plan, never more than 3 subagents at once. Build Sequential mode tasks in this session, one at a time.
 4. Merge each finished branch into dev, then go back to 1.
 Update the board after every change of status.
 
