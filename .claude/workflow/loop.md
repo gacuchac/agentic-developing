@@ -52,7 +52,7 @@ Every task gets a run folder `.claude/runs/<project>/<task-id>/` (git-ignored) h
 5. **Review each plan.** `codex-reviewer` runs pass `plan` (GPT-6 Sol). If the verdict is `CHANGES`, send the findings back to `decomposer` once, and cross-check that plan again if it changed.
 6. **Create evals (only if the Evals flag is yes).** The main session writes the eval cases with me, using `/eval-create` (section 5b). They stay in the task's run folder until the task is built.
 
-Each checked plan then goes to the build. In Mode B it goes to a new `workflow-orchestrator` in its own worktree, with the full text of `ask.md`, `plan.md`, any approved `architecture.md` and the eval cases. In Mode C the main session builds it, one task at a time.
+Each checked plan then goes to the build. In Mode B the main orchestrator first creates the task's worktree from the project's `dev`: `git -C <project> worktree add ~/Developing/.worktrees/<project>/<task-id> -b feature/<task-id> dev` (`bugfix/` for a bug). It then hands the plan to a new `workflow-orchestrator`, with the worktree's absolute path, the branch, the launch hash, the full text of `ask.md`, `plan.md`, any approved `architecture.md` and the eval cases. In Mode C the main session builds it, one task at a time.
 
 ### Build (a workflow orchestrator in Mode B, the main session in Mode C)
 
@@ -77,7 +77,7 @@ For each finished task, one branch at a time, working in that task's worktree (M
 1. Fetch and merge the latest dev into the branch. The main orchestrator resolves any conflict itself. If a conflict can only be resolved by changing a contract or the architecture, it applies the architecture stop rule.
 2. `qa` runs the full suite on the branch.
 3. Push the branch and open a PR into dev. `codex-reviewer` runs pass `pr` (GPT-6 Sol) over the full PR with `--base dev`, the PR's target (it diffs from where the branch last met dev, so dev's commits merged in are left out); with no remote, run it before the local merge. Fix a `CHANGES` verdict in new commits, each reviewed by the commit cadence, then run `pr` again (at most 3 rounds, then report to me). Then wait for the checks and merge it (section 4b).
-4. Remove the worktree, pull dev in the main checkout, and mark the task merged on the board.
+4. Remove the worktree (`git -C <project> worktree remove ~/Developing/.worktrees/<project>/<task-id>`), pull dev in the project's main checkout, and mark the task merged on the board.
 
 When every task launched together is merged, review the combined result in two parts. **Board check** (the main orchestrator, no model): every task launched together is marked merged on the board, and each one's own `answers-ask` and `pr` reviews ended in `PASS` or a fix. **Cross-task review:** `codex-reviewer` runs pass `pr` (GPT-6 Sol) on `dev` with `--base <launch hash>`, `--ask-file` the top-level `ask.md` and `--plan-file` the `build-board.md`, looking for problems between tasks: duplication, clashing contracts, one task undoing another. A `CHANGES` verdict becomes a new `bugfix/` task on the board. Then the board's newly ready tasks go back to Plan.
 

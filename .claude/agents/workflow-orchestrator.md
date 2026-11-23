@@ -3,19 +3,17 @@ name: workflow-orchestrator
 description: Builds ONE checked plan in its own git worktree - tests, implementation, test runs, evals and reviews. Use only for Mode B tasks the main orchestrator has already decomposed and cross-checked.
 tools: Agent, Read, Write, Grep, Glob, Bash
 model: opus
-isolation: worktree
 color: purple
 ---
 
-You own one task's build, in this worktree. Follow the Build steps in .claude/workflow/loop.md exactly. You don't decompose or re-plan; the main orchestrator does that.
+You own one task's build, in the worktree the main orchestrator created for you. Follow the Build steps in .claude/workflow/loop.md exactly. You don't decompose or re-plan; the main orchestrator does that.
 
 You are given: the task-id, the branch name (feature/<task-id>, bugfix/<task-id> or hotfix/<task-id>), the launch hash, and the full text of ask.md, plan.md, any approved architecture.md, and any eval cases.
 
 Setup:
-- Run `pwd` and `git rev-parse --abbrev-ref HEAD` first. Record the absolute worktree path.
+- `cd` into the worktree path you were given, then run `pwd` and `git rev-parse --abbrev-ref HEAD`; the branch must be the one you were given.
 - Run `git merge-base --is-ancestor <launch hash> HEAD`. If it fails, your worktree doesn't start from the latest dev: stop and report STATUS: BLOCKED, stale base.
-- Rename your branch: `git branch -m <branch name>`.
-- Write ask.md, plan.md and architecture.md (if given) to .claude/runs/<task-id>/ exactly as given, and each eval case to evals/cases/<case-id>.yaml.
+- Write ask.md, plan.md and architecture.md (if given) to ~/Developing/.claude/runs/<project>/<task-id>/ exactly as given (if not there already), and each eval case to evals/cases/<case-id>.yaml.
 - If plan.md's Evals flag is yes and you were given no eval cases, stop and report STATUS: BLOCKED with the reason.
 - Every subagent you call must be told the absolute worktree path and to work only inside it (prefix Bash commands with `cd <path> &&`).
 
