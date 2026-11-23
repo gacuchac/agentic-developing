@@ -69,3 +69,26 @@ def own_nodes(function: ast.AST) -> list[ast.AST]:
         if not isinstance(node, FUNCTION_NODES):
             pending.extend(ast.iter_child_nodes(node))
     return found
+
+
+def local_names(function: ast.FunctionDef | ast.AsyncFunctionDef, nodes: list[ast.AST]) -> set[str]:
+    """Return the parameters and plainly assigned names of a function; augmented targets do not bind."""
+    arguments = function.args
+    every_argument = arguments.posonlyargs + arguments.args + arguments.kwonlyargs
+    names = {argument.arg for argument in every_argument}
+    for extra in (arguments.vararg, arguments.kwarg):
+        if extra is not None:
+            names.add(extra.arg)
+    augmented = {id(node.target) for node in nodes if isinstance(node, ast.AugAssign)}
+    for node in nodes:
+        is_store = isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
+        if is_store and id(node) not in augmented:
+            names.add(node.id)
+    return names
+
+
+def root_name(node: ast.AST) -> str | None:
+    """Return the name at the base of an attribute or subscript chain, or None if there is none."""
+    while isinstance(node, (ast.Attribute, ast.Subscript)):
+        node = node.value
+    return node.id if isinstance(node, ast.Name) else None
