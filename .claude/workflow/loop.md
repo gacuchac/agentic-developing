@@ -33,9 +33,11 @@ Route: the same build loop, but after planning, the main session builds each tas
 
 There are two kinds of orchestrator. The **main orchestrator** is the main session: it talks to me, plans every task, cross-checks the plans and merges the results. A **workflow orchestrator** owns one git worktree and builds one checked plan there. In Mode C the main session does that building itself.
 
-Every task gets a run folder `.claude/runs/<task-id>/` (git-ignored) holding `ask.md` (the request, verbatim), `plan.md`, its eval cases until they're built, and review outputs. A feature that splits into several tasks, or a PRD built with `/build`, also gets a build board, `build-board.md`, in its own run folder: one row per task with its task-id, title, the tasks it depends on, its status (waiting, ready, planning, planned, building, merging, merged or blocked), its branch and a note. The main orchestrator updates the board after every change of status, so a crashed session can resume from it.
+**Workspace and projects.** Sessions run from the workspace root `~/Developing`, which holds this workflow; each project is a subfolder with its own repo. A task is named `<project>/<task-id>` (for example `task-scheduler/sched-2`); its branches use the task-id alone. Paths here are relative to the root. A subagent working inside a project or worktree uses them as `~/Developing/<path>`, and calls the scripts as `python3 ~/Developing/scripts/<script>` from inside the project or worktree. Git commands run in the project, never in the root (unless the task is about the workflow itself).
 
-**Codex output.** Every call to `scripts/codex_review.py` (GPT-6 Sol or Luna) saves its full output as `review-<pass>-<n>.md` in the task's run folder (next to `ask.md`), or in `--run-dir` when given, with a one-line header of pass, model, base and exit code. The files are numbered, so each round keeps its own review.
+Every task gets a run folder `.claude/runs/<project>/<task-id>/` (git-ignored) holding `ask.md` (the request, verbatim), `plan.md`, its eval cases until they're built, and review outputs. A feature that splits into several tasks, or a PRD built with `/build`, also gets a build board, `build-board.md`, in its own run folder: one row per task with its task-id, title, the tasks it depends on, its status (waiting, ready, planning, planned, building, merging, merged or blocked), its branch and a note. The main orchestrator updates the board after every change of status, so a crashed session can resume from it.
+
+**Codex output.** Every call to `~/Developing/scripts/codex_review.py` (GPT-6 Sol or Luna) saves its full output as `review-<pass>-<n>.md` in the task's run folder (next to `ask.md`), or in `--run-dir` when given, with a one-line header of pass, model, base and exit code. The files are numbered, so each round keeps its own review.
 
 **Commit cadence.** Every commit has at most 30 changed lines: per file, the larger of lines added and lines deleted; tests and eval cases count; merges are exempt. The `pre-commit` hook in `.githooks/` enforces it. Each commit achieves one thing, and its message starts with its story or subtask: `US-n: <what this achieves>`, or `test(US-n): ...` for tests. If a step can't fit in 30 lines, split it; if it can't be split, the approach is probably wrong, so say so instead of forcing it. Never use `--no-verify`. Each new commit is reviewed on its own, oldest first (`git rev-list --reverse <last reviewed>..HEAD`): `codex-reviewer` runs pass `commit` (the ask, the plan and the earlier commits give it the big picture), then `principles` and `alternatives`, each with `--commit <sha>`. A `CHANGES` verdict is fixed in a later commit whose message names the fix.
 
@@ -58,7 +60,7 @@ Each checked plan then goes to the build. In Mode B it goes to a new `workflow-o
 2. **Write tests.** `qa` writes tests for the plan under `tests/`, each named after the user story it checks, and confirms they fail for the right reason. It commits them by the commit cadence.
 3. **Implement.** `implementer` builds each subtask, committing by the commit cadence. It never edits tests or evals. Then every new commit, tests included, is reviewed on its own (commit cadence); a `CHANGES` verdict goes back to the implementer.
 4. **Run tests.** `qa` runs the new and affected tests first and reports pass/fail with the failing output. Once they pass, it runs the full suite once before the final review.
-5. **Run evals (only if the Evals flag is yes).** For each case: `eval-runner` plays the user, `scripts/eval_checks.py` runs the code checks, and `eval-judge` scores the run (section 5b).
+5. **Run evals (only if the Evals flag is yes).** For each case: `eval-runner` plays the user, `~/Developing/scripts/eval_checks.py` runs the code checks, and `eval-judge` scores the run (section 5b).
 6. **Final review.** `codex-reviewer` runs pass `answers-ask` (GPT-6 Luna) with the launch hash as the base. It reads the plan, every commit's message and file stats, and each commit's verdict, not the diff, which was reviewed commit by commit.
 7. **Decide.**
    - all tests pass, every eval case passes, and `answers-ask` is `PASS` → done: the branch is a series of reviewed commits (`alternatives` findings are reported, not acted on, unless one is clearly better and cheap),
@@ -91,7 +93,7 @@ When every task launched together is merged, review the combined result in two p
 
 - Nothing is committed to `main`, `uat` or `dev` directly. Everything arrives by PR.
 - Every task works on its own branch off an up-to-date `dev`: `feature/<task-id>` for a feature, `bugfix/<task-id>` for a bug, and `hotfix/<task-id>` only when I call it a hotfix. In Mode B, each workflow orchestrator's worktree is its task's branch.
-- Before any work starts, the main checkout must be on `dev`, clean and up to date: `git switch dev`, `git status --porcelain` printing nothing, then `git pull --ff-only`. If there are uncommitted changes, stop and ask me what to do with them; never commit them to `dev`. The launch hash is `dev`'s tip after the pull (`git rev-parse HEAD`).
+- Before any work starts, the project's main checkout must be on `dev`, clean and up to date: `cd <project> && git switch dev`, `git status --porcelain` printing nothing, then `git pull --ff-only`. If there are uncommitted changes, stop and ask me what to do with them; never commit them to `dev`. The launch hash is `dev`'s tip after the pull (`git rev-parse HEAD`).
 - Use merge commits (`gh pr merge --merge`), never squash or rebase merges, so the histories of `dev`, `uat` and `main` stay compatible.
 - Agents may, on their own: merge a task's PR into `dev` once its checks pass (`gh pr create --base dev --fill`, `gh pr checks --watch`, `gh pr merge --merge`); promote `dev` to `uat` with a PR from `dev` into `uat`, merged once its checks pass; and send a hotfix to `uat` with a PR from its `hotfix/` branch, as well as to `dev`.
 - When I ask for a release, open a PR from `uat` into `main` and stop. Never approve or merge a PR into `main`; I do that.
@@ -101,7 +103,7 @@ When every task launched together is merged, review the combined result in two p
 
 ## 5. Review passes
 
-Each pass is narrow on purpose. Each lives in `.claude/review-passes/<pass>.md` and is run by `scripts/codex_review.py`, which picks the model by pass.
+Each pass is narrow on purpose. Each lives in `.claude/review-passes/<pass>.md` and is run by `~/Developing/scripts/codex_review.py`, which picks the model by pass.
 
 **GPT-6 Sol, open-ended:**
 
@@ -169,7 +171,7 @@ Harness contract (project code in `harness/`, built by the implementer and teste
 `python3 -m harness --case <case-id> --run <run-id> --message "<text>"` sends one user message to the agent under test in that case's session, prints only the agent's visible reply, and appends to `evals/runs/<run-id>/<case-id>/trace.jsonl` one JSON event per line: `{"type": "model_call", "input_tokens": n, "output_tokens": n, "ts": seconds}`, `{"type": "tool_call", "tool": name, "args": {...}, "output": ..., "ts": seconds}`, and `{"type": "turn", "role": "user" or "agent", "text": ..., "ts": seconds}`.
 
 **(c) Judge.** Two parts, each reported per dimension, never blended into one number:
-- **Code checks** (cheap, no model): `python3 scripts/eval_checks.py <run dir> <case file>` checks tool-call count, redundant calls (the same tool with the same arguments more than once), total tokens and wall time against the case's budgets, and writes `checks.json`.
+- **Code checks** (cheap, no model): `python3 ~/Developing/scripts/eval_checks.py <run dir> <case file>` checks tool-call count, redundant calls (the same tool with the same arguments more than once), total tokens and wall time against the case's budgets, and writes `checks.json`.
 - **Judge** (`eval-judge`, GPT-6 Luna): reads the case, the transcript, the full trace and `checks.json` against the rubric in `.claude/review-passes/judge.md`, and scores 1 to 5, with evidence, four separate dimensions: whether each tool call makes sense (`tool_use`), groundedness against tool outputs (`groundedness`), whether it answers the question (`answers_question`), and completeness (`completeness`). It writes `scores.json`.
 
 A case passes only when every code check passes and every dimension meets the case's threshold.
