@@ -5,7 +5,9 @@ from __future__ import annotations
 import ast
 import io
 import re
+import sys
 import tokenize
+from pathlib import Path
 
 Finding = tuple[int, str]
 
@@ -161,3 +163,28 @@ def function_mutations(function: ast.FunctionDef | ast.AsyncFunctionDef, module_
         if name in module_names and name not in local:
             findings.append((node.lineno, mutation_message(name)))
     return findings
+
+
+def check_file(path: Path) -> list[Finding]:
+    """Return all findings for one Python file, with the banned-import check for scripts/workflow/ paths."""
+    source = path.read_text()
+    findings = justification_comments(source) + hidden_state(source)
+    if path.parent.parts[-2:] == ("scripts", "workflow"):
+        findings += banned_imports(source, {"subprocess"})
+    return sorted(findings)
+
+
+def main(argv: list[str]) -> int:
+    """Print `path:line: message` for each finding in the given .py files; return 1 if any, else 0."""
+    found = False
+    for argument in argv:
+        if not argument.endswith(".py"):
+            continue
+        for line, message in check_file(Path(argument)):
+            print(f"{argument}:{line}: {message}")
+            found = True
+    return 1 if found else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
