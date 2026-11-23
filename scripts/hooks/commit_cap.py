@@ -55,6 +55,11 @@ def without_doc_files(counts: dict[str, int]) -> dict[str, int]:
     return {path: 0 if path in docs else n for path, n in counts.items()}
 
 
+def without_skill_files(counts: dict[str, int]) -> dict[str, int]:
+    """counts with every path under the workspace's .claude/skills/ counted 0: skills are vendored prompts and tools."""
+    return {path: 0 if path.startswith(".claude/skills/") else n for path, n in counts.items()}
+
+
 def count_changed_lines(numstat: str) -> int:
     """Total changed lines over all files, counted as in file_counts."""
     return sum(file_counts(numstat).values())
@@ -82,7 +87,8 @@ def main() -> int:
     if first_commit() or merge_in_progress(Path(git("rev-parse", "--git-dir").strip())):
         return 0
     numstat, name_status = (git("diff", "--cached", flag, "-M") for flag in ("--numstat", "--name-status"))
-    counts = without_doc_files(without_test_files(without_deleted_files(file_counts(numstat), name_status)))
+    counts = without_deleted_files(file_counts(numstat), name_status)
+    counts = without_skill_files(without_doc_files(without_test_files(counts)))
     if sum(counts.values()) <= MAX_LINES:
         return 0
     lines = "\n".join(f"  {n:4d}  {path}" for path, n in counts.items())

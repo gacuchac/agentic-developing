@@ -139,3 +139,24 @@ def test_x1_two_hundred_markdown_lines_plus_ten_python_pass(tmp_path):
 def test_x1_thirty_one_python_lines_still_block_beside_markdown(tmp_path):
     _stage_two(_with_first_commit(tmp_path), 200, 31)
     assert _run_cap(tmp_path) == 1
+
+
+def test_x9_skill_files_count_zero_including_their_scripts():
+    counts = {".claude/skills/statechart/scripts/run.ts": 400, ".claude/skills/x/SKILL.md": 9, "scripts/a.py": 5}
+    assert cap.without_skill_files(counts) == {
+        ".claude/skills/statechart/scripts/run.ts": 0,
+        ".claude/skills/x/SKILL.md": 0,
+        "scripts/a.py": 5,
+    }
+
+
+def test_x9_only_the_workspace_skills_folder_is_exempt():
+    counts = {"src/.claude/skills/a.ts": 4, "claude/skills/a.ts": 3, ".claude/settings.json": 2}
+    assert cap.without_skill_files(counts) == counts
+
+
+def test_x9_vendored_skill_scripts_pass_main(tmp_path, monkeypatch):
+    repo = _with_first_commit(tmp_path)
+    _stage_lines_at(repo, ".claude/skills/statechart/scripts/run.ts", 500)
+    monkeypatch.chdir(repo)
+    assert cap.main() == 0
