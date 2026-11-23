@@ -1,5 +1,7 @@
 # Full loop vs interview-mode loop
 
+> **Historical spec.** This describes the first version of the workflow, copied into each project, with Modes A, B and C. The live rules are [CLAUDE.md](../CLAUDE.md) and [.claude/workflow/loop.md](../.claude/workflow/loop.md): the workflow lives only in this workspace root, the modes are Simple, Parallel and Sequential, commits are capped at 30 lines and reviewed one at a time, and each PR gets a full `pr` review.
+
 Companion to [multi-agent-setup.md](multi-agent-setup.md) and [multi-agent-diagrams.md](multi-agent-diagrams.md).
 
 ## 1. Full loop

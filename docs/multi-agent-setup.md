@@ -1,5 +1,7 @@
 # Multi-model agent workflow for Claude Code in VS Code
 
+> **Historical spec.** This describes the first version of the workflow, copied into each project, with Modes A, B and C. The live rules are [CLAUDE.md](../CLAUDE.md) and [.claude/workflow/loop.md](../.claude/workflow/loop.md): the workflow lives only in this workspace root, the modes are Simple, Parallel and Sequential, commits are capped at 30 lines and reviewed one at a time, and each PR gets a full `pr` review.
+
 ## 0. How to use this document
 
 This document is addressed to you, the Claude Code agent running in the VS Code extension. Your job is to set up the workflow described below in the current repository, then prove it works with the smoke test in section 11.
