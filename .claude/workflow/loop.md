@@ -10,7 +10,7 @@ The main orchestrator classifies every task before doing anything else and state
 - is easy to test (a few small tests at most),
 - doesn't change LLM or agent behaviour (prompts, tool definitions, model calls), since that needs evals.
 
-Route: on the task's own branch off `dev` (section 4b): `implementer`, committing by the commit cadence (section 4) → `qa` runs tests → `codex-reviewer` passes `commit` and `principles` on each commit, then `answers-ask` → done, or one fix round → PR into `dev`, reviewed as a whole by pass `pr` → merged.
+Route: on the task's own branch off `dev` (section 4b), the unit loop of section 4 in its fast lane, then the branch finish (section 4) → PR into `dev`, reviewed as a whole by pass `pr` → merged.
 
 **Parallel mode** (complex, splits into independent pieces). The task can be split into pieces that can be built at the same time: no piece changes a function or contract that another piece changes or relies on. Pieces that touch the same file in different functions count as independent. Clearly defined and easy to evaluate, even if it touches many files.
 
@@ -39,7 +39,13 @@ Every task gets a run folder `.claude/runs/<project>/<task-id>/` (git-ignored) h
 
 **Codex output.** Every call to `~/Developing/scripts/codex_review.py` (GPT-6 Sol or Luna) saves its full output as `review-<pass>-<n>.md` in the task's run folder (next to `ask.md`), or in `--run-dir` when given, with a one-line header of pass, model, base and exit code. The files are numbered, so each round keeps its own review.
 
-**Commit cadence.** Every commit has at most 30 changed lines: per file, the larger of lines added and lines deleted; tests and eval cases count; merges, deleting a whole file, and a repo's first commit (its scaffold) don't count. The workspace's `pre-commit` hook (`~/Developing/.githooks/`) enforces it in every repo under `~/Developing`. Each commit achieves one thing, and its message starts with its story or subtask: `US-n: <what this achieves>`, or `test(US-n): ...` for tests. If a step can't fit in 30 lines, split it; if it can't be split, the approach is probably wrong, so say so instead of forcing it. Never use `--no-verify`. Each new commit is reviewed on its own, oldest first (`git rev-list --reverse <last reviewed>..HEAD`): `codex-reviewer` runs pass `commit` (the ask, the plan and the earlier commits give it the big picture), then `principles` and `alternatives`, each with `--commit <sha>`. A `CHANGES` verdict is fixed in a later commit whose message names the fix.
+**Commit cadence.** Every commit has at most 30 changed lines of code: per file, the larger of lines added and lines deleted. Files under `tests/`, documentation (`.md`, `.txt`, `.rst`, `LICENSE`), merges, deleting a whole file, and a repo's first commit (its scaffold) don't count; eval cases and config do. Each commit achieves one thing, and its message starts with its story or subtask: `US-n: <what this achieves>`, `test(US-n): ...`, or a plan id such as `X2:`, optionally with `(i/n)` when one subtask spans several commits. If a step can't fit in 30 lines, split it; if it can't be split, the approach is probably wrong, so say so instead of forcing it. Never cram code (semicolons, long one-liners) to fit the cap. Never use `--no-verify`.
+
+**Gates (code, not judgement).** The workspace's git hooks (`~/Developing/.githooks/`) run in every repo under `~/Developing`: `pre-commit` runs the line cap (`scripts/hooks/commit_cap.py`), then `ruff check` and `scripts/hooks/slop_checks.py` on the staged Python (`scripts/hooks/lint_gate.py`); `commit-msg` checks the story or subtask id (`scripts/hooks/commit_msg.py`). The root repo's CI runs ruff, the slop checks and the suite on every PR. `ruff.toml` and the slop checks enforce what review rubrics used to judge: types and docstrings, size and complexity, module state, dead code, justification comments. A rule that matters goes into a check, not into prose (see "Correction ratchet").
+
+**Commit reviews.** Each new commit is reviewed on its own before the next commit is made, oldest first: `codex-reviewer` runs pass `commit` with `--commit <sha>` (the ask, the plan and the earlier commits give it the big picture). `principles` and `alternatives` run once per branch, in the branch finish, not per commit. A `CHANGES` verdict is decided per finding: *correct* is fixed in a later commit whose message names the fix (`X2: Fix C2 on 875bb0a: ...`); *wrong* or *overstated* is logged in the run folder's `decisions-log.md` with evidence (file:line and the quoted text that contradicts it). A FAIL without a quoted line is dropped.
+
+**Correction ratchet.** When the same correction or the same dismissal happens twice (in `decisions-log.md`, a review, or from me), the next commit on the branch makes it impossible: architecture first, then a ruff rule or a check in `slop_checks.py` or a hook, then a test, prose last (`pstack:correct`). A rubric criterion that a check now enforces is removed from the rubric in the same change. Keep the "Rule → what enforces it" table in CLAUDE.md current.
 
 **Concurrency.** At most 3 subagents run at the same time, of any kind. The main orchestrator never has more than 3 running at once, whether decomposers, workflow orchestrators or any other. Each workflow orchestrator runs its own subagents one at a time.
 
@@ -57,14 +63,24 @@ Each checked plan then goes to the build. In Parallel mode the main orchestrator
 ### Build (a workflow orchestrator in Parallel mode, the main session in Sequential mode)
 
 1. **Set up.** Work on the task's own branch, starting from dev's tip (section 4b). Write the plan files to the run folder and the eval cases to `evals/cases/`.
-2. **Write tests.** `qa` writes tests for the plan under `tests/`, each named after the user story it checks, and confirms they fail for the right reason. It commits them by the commit cadence.
-3. **Implement.** `implementer` builds each subtask, committing by the commit cadence. It never edits tests or evals. Then every new commit, tests included, is reviewed on its own (commit cadence); a `CHANGES` verdict goes back to the implementer.
-4. **Run tests.** `qa` runs the new and affected tests first and reports pass/fail with the failing output. Once they pass, it runs the full suite once before the final review.
+2. **Unit loop, one plan subtask at a time.** The main session (or the workflow orchestrator) drives it and makes every commit; qa and the implementer never commit.
+   1. **Lane.** The decomposer tags each subtask `fast` or `full`. Full: it changes a contract, a schema or migration, a risky seam (auth, network, an external service, deploy configuration) or security; everything else is fast. Full adds the light `tests` review after step 2 and the `impl` review after step 4.
+   2. **Tests first.** `qa` writes tests under `tests/` for the subtask, named after its story, testing behaviour through public contracts (`pstack:principle-test-behavior-not-implementation`). It runs them and confirms they fail for the expected reason. It returns only its result block.
+   3. **Snapshot.** The main session records a hash of the test files qa wrote.
+   4. **Implement until green.** `implementer` writes the code and iterates on its own until the unit's tests, the full suite, `ruff check` and `slop_checks.py` pass and the code fits the cap. It never edits tests; a test it believes is wrong stays failing and goes in `tests_disputed`. It returns only its result block.
+   5. **Verify.** The main session checks the test-file hash is unchanged, reruns the suite itself, and decides any disputed test with evidence (*tests wrong*: quote the plan or ask line the test contradicts → back to qa; otherwise → back to the implementer).
+   6. **Commit and review.** Commit (the hooks run the gates), then pass `commit` on that commit, then decide its findings (commit reviews above). Only then the next subtask.
+   Stop after 3 rounds back to the same step within one subtask and report what blocks.
+3. **Branch finish.** After the last subtask:
+   1. **Subtract.** Run `deslop` and `pstack:no-comments` over the branch diff against the launch hash. Their edits are commits like any other (gates, `commit` review). Behaviour and tests stay the same.
+   2. **Principles and alternatives,** once over the whole branch: `codex-reviewer` runs both with `--base <launch hash>` and no `--commit` on a clean tree. Decide findings as for commit reviews.
+   3. **Full suite** once.
+4. **Writing.** Reports, PR descriptions and summaries for me follow `pstack:unslop`. A PR description follows the `visual-pr` shape: one-sentence why, 1–3 notes, a structural change outline. Plans and options are shown visually where that's clearer (`show-me`).
 5. **Run evals (only if the Evals flag is yes).** For each case: `eval-runner` plays the user, `~/Developing/scripts/eval_checks.py` runs the code checks, and `eval-judge` scores the run (section 5b).
 6. **Final review.** `codex-reviewer` runs pass `answers-ask` (GPT-6 Luna) with the launch hash as the base. It reads the plan, every commit's message and file stats, and each commit's verdict, not the diff, which was reviewed commit by commit.
 7. **Decide.**
    - all tests pass, every eval case passes, and `answers-ask` is `PASS` → done: the branch is a series of reviewed commits (`alternatives` findings are reported, not acted on, unless one is clearly better and cheap),
-   - tests fail, an eval case fails, or review finds a defect in the code → back to step 3,
+   - tests fail, an eval case fails, or review finds a defect in the code → back to step 2,
    - review or evals show the plan itself was wrong, or the tests don't test the real ask → back to Plan: a workflow orchestrator stops and reports STATUS: REPLAN with the reason; the main orchestrator sends that reason to `decomposer`, then cross-checks and reviews the new plan before it's built again,
    - any subagent reports `ARCHITECTURE CHANGE`, or a review finding can only be fixed by an architecture change → follow the architecture stop rule below.
 
@@ -115,7 +131,7 @@ Each pass is narrow on purpose. Each lives in `.claude/review-passes/<pass>.md` 
 **GPT-6 Luna, with a fixed rubric.** Luna is fast and cheap but reliable only with a clear rubric, so each pass answers every criterion with PASS, FAIL or N/A plus evidence (file and line). The verdict is `CHANGES` if any criterion is FAIL.
 
 - **commit** (one commit, `--commit <sha>`; needs the ask and the plan): sees that commit's message and diff, plus the one-line log of earlier commits.
-  - C1. The message states one clear goal and names its story or subtask (US-n or subtask n).
+  - C1. The message states one clear goal (its story or subtask id is checked by the `commit-msg` hook).
   - C2. The diff does what the message says, fully.
   - C3. The diff does nothing the message doesn't say.
   - C4. The goal is a step toward the ask and the plan, not a detour or a change the plan doesn't call for.
@@ -127,14 +143,12 @@ Each pass is narrow on purpose. Each lives in `.claude/review-passes/<pass>.md` 
   - A4. Every commit has a `commit` review verdict, and each `CHANGES` is followed by a later commit that names the fix.
   - A5. No commit deletes, skips or loosens a test, judging from its message, its file stats and its review.
   - A6. Every file changed belongs to a subtask in the plan.
-- **principles** (run per commit, with `--commit <sha>`):
+- **principles** (once per branch, `--base <launch hash>`): types, docstrings, size and module state are checked by ruff and `slop_checks.py` before review, so the rubric keeps only judgement calls.
   - P1. Each new or changed function has one purpose.
-  - P2. Each public function has typed inputs and outputs and a docstring that states its contract.
   - P3. No public function's signature or output shape changed, unless an approved `architecture.md` covers it.
-  - P4. No function relies on hidden or global mutable state.
   - P5. Functions use other functions only through their contracts, not their internals.
   - P6. Each module keeps one clear responsibility.
-- **alternatives** (run per commit, with `--commit <sha>`):
+- **alternatives** (once per branch, `--base <launch hash>`):
   - L1. Is there an approach with clearly less code or fewer moving parts that meets the same stories?
   - L2. Is there a clearly more robust approach (errors, edge cases) at similar cost?
   - L3. Does the change rebuild something the codebase or the standard library already provides?
