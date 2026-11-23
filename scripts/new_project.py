@@ -50,3 +50,20 @@ def init_repo(root: Path) -> None:
     for step in steps:
         subprocess.run(["git", "-C", str(root), *step], check=True)
 
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("name", help="folder name of the new project")
+    parser.add_argument("description", help="one paragraph: what the project is")
+    args = parser.parse_args()
+    root = WORKSPACE / args.name
+    if root.exists():
+        sys.exit(f"{root} already exists.")
+    write_files(root, project_files(args.name, args.description))
+    init_repo(root)
+    print(f"Created {root} on dev. Next: python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
