@@ -11,6 +11,8 @@ Finding = tuple[int, str]
 
 JUSTIFICATION = re.compile(r"\b(workaround|for now|hack|temporary|temporarily|in case|quick fix)\b", re.IGNORECASE)
 
+FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
+
 
 def justification_comments(source: str) -> list[Finding]:
     """Return (line, SLOP001 message) for each comment that justifies a workaround."""
@@ -41,3 +43,29 @@ def imported_modules(node: ast.AST) -> list[str]:
     if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
         return [node.module]
     return []
+
+
+def module_level_names(tree: ast.Module) -> set[str]:
+    """Return the names bound by top-level assignments of a module."""
+    names = set()
+    for statement in tree.body:
+        if isinstance(statement, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            names.update(stored_names(statement))
+    return names
+
+
+def stored_names(node: ast.AST) -> set[str]:
+    """Return every plain name stored anywhere inside node."""
+    return {child.id for child in ast.walk(node) if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store)}
+
+
+def own_nodes(function: ast.AST) -> list[ast.AST]:
+    """Return the nodes of a function body, without entering nested functions."""
+    found = []
+    pending = list(ast.iter_child_nodes(function))
+    while pending:
+        node = pending.pop()
+        found.append(node)
+        if not isinstance(node, FUNCTION_NODES):
+            pending.extend(ast.iter_child_nodes(node))
+    return found
