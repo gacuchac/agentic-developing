@@ -1,0 +1,5 @@
+# Git settings for every repo under ~/Developing/ (the workspace and each project).
+# Enabled once per machine with:
+#   git config --global includeIf.gitdir:~/Developing/.path ~/Developing/.gitconfig-workflow
+[core]
+	hooksPath = ~/Developing/.githooks
