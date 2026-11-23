@@ -1,5 +1,7 @@
 """Tests for evidence.py: quote_near and quote_in (US-9)."""
 
+import pytest
+
 import evidence
 
 
@@ -447,3 +449,101 @@ def test_us9_new_options_missing_facts_return_errors_not_exceptions(tmp_path):
              "user_continue": {"user_said": "go", "to": "qa"}}
     for opt, ev in cases.items():
         assert evidence.check_evidence(opt, ev, {}), opt
+
+
+# non-string and wrongly typed evidence values (US-9, fix unit 14-fix1)
+import re
+
+BAD_TEXT = [5, ["x"], None]
+
+
+def lenient(tmp_path, v):
+    """Facts that would accept str(v) / "" everywhere, so only the type check can reject."""
+    s = [str(v), ""]
+    text = make_text(l10="quick brown " + str(v))
+    return dfacts(tmp_path, failures=["tests/t.py::test_a"] + s, docs=[PLAN, ASK] + s,
+                  resume=["qa"] + s, read=lambda f: text, fails=["T1"], capped=set())
+
+
+def run_bad(option, ev, field, tmp_path, v):
+    facts = lenient(tmp_path, v)
+    facts["fails"] = ["T1"]
+    errs = evidence.check_evidence(option, ev, facts)
+    assert errs, f"{option}.{field}={v!r} accepted"
+    assert any(re.search(rf"\b{field}\b", e) for e in errs), (field, errs)
+
+
+@pytest.mark.parametrize("v", BAD_TEXT)
+def test_us9_escalate_non_str_question_fails(tmp_path, v):
+    run_bad("escalate", {"question": v}, "question", tmp_path, v)
+
+
+@pytest.mark.parametrize("field", ["user_said", "to"])
+@pytest.mark.parametrize("v", BAD_TEXT)
+def test_us9_user_continue_non_str_field_fails(tmp_path, field, v):
+    run_bad("user_continue", {"user_said": "go", "to": "qa", field: v}, field, tmp_path, v)
+
+
+@pytest.mark.parametrize("field", ["test", "quote"])
+@pytest.mark.parametrize("v", BAD_TEXT)
+def test_us9_tests_wrong_non_str_field_fails(tmp_path, field, v):
+    run_bad("tests_wrong", {**tw(), field: v}, field, tmp_path, v)
+
+
+@pytest.mark.parametrize("v", BAD_TEXT)
+def test_us9_architecture_stop_non_str_path_fails(tmp_path, v):
+    (tmp_path / "architecture-change-a.md").write_text("x")
+    run_bad("architecture_stop", {"path": v}, "path", tmp_path, v)
+
+
+@pytest.mark.parametrize("v", BAD_TEXT)
+def test_us9_overstated_non_str_reason_fails(tmp_path, v):
+    ev = {"findings": [{"id": "T1", "reason": v}]}
+    run_bad("overstated", ev, "reason", tmp_path, v)
+
+
+@pytest.mark.parametrize("field", ["file", "quote"])
+@pytest.mark.parametrize("v", BAD_TEXT)
+def test_us9_wrong_non_str_field_fails(tmp_path, field, v):
+    ev = {"findings": [{**wrong_item(id="T1"), field: v}]}
+    run_bad("wrong", ev, field, tmp_path, v)
+
+
+@pytest.mark.parametrize("v", ["10", 10.0, None, [10]])
+def test_us9_wrong_non_int_line_fails(tmp_path, v):
+    ev = {"findings": [wrong_item(id="T1", line=v)]}
+    errs = evidence.check_evidence("wrong", ev, lenient(tmp_path, "x"))
+    assert errs
+
+
+def test_us9_code_wrong_str_tests_names_tests(tmp_path):
+    errs = chk("code_wrong", {"tests": "t1"}, tmp_path, failures=["t1"])
+    assert errs and any(re.search(r"\btests\b", e) for e in errs)
+
+
+@pytest.mark.parametrize("option", ["correct", "overstated", "wrong"])
+def test_us9_findings_str_fails_without_raising(option, tmp_path):
+    errs = evidence.check_evidence(option, {"findings": "T1"}, lenient(tmp_path, "x"))
+    assert errs and any("findings" in e for e in errs)
+
+
+def test_us9_valid_baselines_still_pass(tmp_path):
+    (tmp_path / "architecture-change-a.md").write_text("x")
+    assert chk("escalate", {"question": "q?"}, tmp_path) == []
+    assert chk("user_continue", {"user_said": "go", "to": "qa"}, tmp_path) == []
+    assert chk("tests_wrong", tw(), tmp_path) == []
+    assert chk("architecture_stop", {"path": "architecture-change-a.md"}, tmp_path) == []
+
+
+def test_us9_architecture_stop_path_object_to_real_file_fails(tmp_path):
+    f = tmp_path / "architecture-change-x.md"
+    f.write_text("x")
+    errs = chk("architecture_stop", {"path": f}, tmp_path)
+    assert errs and any(re.search(r"\bpath\b", e) for e in errs)
+
+
+def test_us9_wrong_path_object_file_with_valid_lookup_fails():
+    import pathlib
+    ev = {"findings": [wrong_item(id="T1", file=pathlib.Path("a.py"))]}
+    errs = evidence.check_evidence("wrong", ev, make_facts())
+    assert errs and any(re.search(r"\bfile\b", e) for e in errs)

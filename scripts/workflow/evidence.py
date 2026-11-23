@@ -24,14 +24,23 @@ def quote_in(texts: list[str], quote: str) -> bool:
     return bool(q) and any(q in _norm(t) for t in texts)
 
 
+_FIELDS = {"overstated": ("reason",), "wrong": ("file", "quote"), "tests_wrong": ("test", "quote"),
+           "escalate": ("question",), "architecture_stop": ("path",), "user_continue": ("user_said", "to")}
+
+
+def _bad(option: str, ev: dict) -> list[str]:
+    """Errors for each text field of option that is not a non-empty str."""
+    return [f"{k}: must be non-empty text" for k in _FIELDS.get(option, ())
+            if not (isinstance(ev.get(k), str) and ev[k].strip())]
+
+
 def _item_errors(option: str, it: object, facts: dict) -> list[str]:
     d = it if isinstance(it, dict) else {"id": it}; fid = d.get("id")
     if fid not in facts["fails"]:
         return [f"{fid}: not a failing finding"]
-    if option == "overstated" and not str(d.get("reason") or "").strip():
-        return [f"{fid}: empty reason"]
-    if option != "wrong":
-        return []
+    errs = _bad(option, d) + ["line: must be an int"] * (option == "wrong" and type(d.get("line")) is not int)
+    if errs or option != "wrong":
+        return [f"{fid}: {e}" for e in errs]
     text = facts["read"](str(d.get("file")))
     if fid in facts["capped"] or text is None:
         return [f"{fid}: capped, or file {d.get('file')} not found"]
@@ -40,6 +49,8 @@ def _item_errors(option: str, it: object, facts: dict) -> list[str]:
 
 
 def _other_errors(option: str, ev: dict, facts: dict) -> list[str]:
+    if _bad(option, ev):
+        return _bad(option, ev)
     fails, g = facts.get("failures") or [], lambda k: str(ev.get(k) or "")
     if option == "tests_wrong":
         t = g("test")
