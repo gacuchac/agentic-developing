@@ -66,6 +66,11 @@ def test_thirty_lines_pass_and_thirty_one_block(tmp_path):
     assert _run_cap(tmp_path / "big") == 1
 
 
+def test_first_commit_is_exempt(tmp_path):
+    _stage_lines(tmp_path, 200)
+    assert _run_cap(tmp_path) == 0
+
+
 def test_finishing_a_merge_is_exempt(tmp_path):
     _stage_lines(_with_first_commit(tmp_path), 31)
     (tmp_path / ".git" / "MERGE_HEAD").write_text("0" * 40 + "\n")

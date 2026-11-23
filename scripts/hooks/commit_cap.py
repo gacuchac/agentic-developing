@@ -38,9 +38,16 @@ def merge_in_progress(git_dir: Path) -> bool:
     return (git_dir / "MERGE_HEAD").exists()
 
 
+def first_commit() -> bool:
+    """True when the repo has no commits yet: its first commit is the project scaffold, which the cap exempts."""
+    return (
+        subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], capture_output=True, check=False).returncode != 0
+    )
+
+
 def main() -> int:
-    """Exit 0 when the staged changes fit in MAX_LINES (or finish a merge), else list them and exit 1."""
-    if merge_in_progress(Path(git("rev-parse", "--git-dir").strip())):
+    """Exit 0 when the staged changes fit in MAX_LINES (or finish a merge or make the first commit), else exit 1."""
+    if first_commit() or merge_in_progress(Path(git("rev-parse", "--git-dir").strip())):
         return 0
     counts = file_counts(git("diff", "--cached", "--numstat", "-M"))
     if sum(counts.values()) <= MAX_LINES:
