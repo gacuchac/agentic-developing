@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Pre-commit check: block a commit whose staged changes exceed MAX_LINES changed lines."""
+
 from __future__ import annotations
 
 import subprocess
@@ -45,8 +46,11 @@ def main() -> int:
     if sum(counts.values()) <= MAX_LINES:
         return 0
     lines = "\n".join(f"  {n:4d}  {path}" for path, n in counts.items())
-    print(f"Commit blocked: {sum(counts.values())} changed lines, limit {MAX_LINES}.\n{lines}\n"
-          "Split it into smaller commits, each achieving one thing.", file=sys.stderr)
+    print(
+        f"Commit blocked: {sum(counts.values())} changed lines, limit {MAX_LINES}.\n{lines}\n"
+        "Split it into smaller commits, each achieving one thing.",
+        file=sys.stderr,
+    )
     return 1
 
 

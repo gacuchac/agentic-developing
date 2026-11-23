@@ -41,10 +41,16 @@ def test_commit_review_shows_only_that_commit_after_earlier_log(tmp_path, monkey
 def test_answers_ask_sees_latest_branch_verdicts_and_no_diffs(tmp_path, monkeypatch):
     base, second, third = _repo_with_three_commits(tmp_path)
     monkeypatch.chdir(tmp_path)
-    reviews = [(second, "VERDICT: CHANGES\nC2: FAIL — misses x"), (second, "VERDICT: PASS\nC1: PASS — ok"),
-               ("f" * 40, "VERDICT: CHANGES\nC3: FAIL — stale"), (third, "VERDICT: CHANGES\nC2: FAIL — misses y")]
+    reviews = [
+        (second, "VERDICT: CHANGES\nC2: FAIL — misses x"),
+        (second, "VERDICT: PASS\nC1: PASS — ok"),
+        ("f" * 40, "VERDICT: CHANGES\nC3: FAIL — stale"),
+        (third, "VERDICT: CHANGES\nC2: FAIL — misses y"),
+    ]
     for n, (sha, body) in enumerate(reviews, 1):
-        (tmp_path / f"review-commit-{n}.md").write_text(f"<!-- pass: commit | base: commit {sha} | exit: 0 -->\n{body}\n")
+        (tmp_path / f"review-commit-{n}.md").write_text(
+            f"<!-- pass: commit | base: commit {sha} | exit: 0 -->\n{body}\n"
+        )
     overview = cr.branch_overview(base, tmp_path)
     assert "US-1: add three" in overview and "three.txt" in overview and "+three body" not in overview
     assert "misses x" not in overview and "stale" not in overview
@@ -65,7 +71,10 @@ def test_pr_changes_leave_out_target_commits_merged_in(tmp_path, monkeypatch):
     subprocess.run(["git", "-C", str(tmp_path), "switch", "-q", "dev"], check=True)
     _commit(tmp_path, "theirs.txt", "theirs\n", "other task")
     subprocess.run(["git", "-C", str(tmp_path), "switch", "-q", "feature/x"], check=True)
-    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "merge", "-q", "--no-edit", "dev"], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "merge", "-q", "--no-edit", "dev"],
+        check=True,
+    )
     (tmp_path / "scratch.txt").write_text("uncommitted\n")
     monkeypatch.chdir(tmp_path)
     changes = cr.pr_changes("dev")
