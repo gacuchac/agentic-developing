@@ -1,8 +1,8 @@
 # Third-party skills
 
 Copied into this repo's `.claude/skills` and `.claude/agents` on 2026-11-23 (pstack also needs `.claude/docs/harness/claude-code.md`):
-- `pstack` by Lauren Tan, from `cursor/plugins` (MIT, Copyright (c) 2026 Lauren Tan).
-- `show-me`, `visual-pr`, `improve-claude-md`, `rpi` by HumanLayer, from `humanlayer/skills` (MIT, Copyright (c) 2026 HumanLayer).
+- From Lauren Tan's `pstack` in `cursor/plugins` (MIT, Copyright (c) 2026 Lauren Tan): `unslop`, `correct`, `no-comments` and the `comment-sicko` agent, `blast-radius`, `create-verification-skill`, `maintain-verification-skill`, `principle-fix-root-causes`, `principle-boundary-discipline`. `no-comments`, `blast-radius` and the verification skills are edited to point at this workspace's skills and paths.
+- `show-me`, `visual-pr`, `improve-claude-md` by HumanLayer, from `humanlayer/skills` (MIT, Copyright (c) 2026 HumanLayer).
 
 Adapted into this repo:
 - `deslop` from Cursor's `cursor-team-kit` (MIT, Copyright (c) 2026 Cursor), with pstack's subtract-before-you-add and minimize-reader-load principles (MIT, Lauren Tan).
