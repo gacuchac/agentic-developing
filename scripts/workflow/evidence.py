@@ -48,27 +48,32 @@ def _item_errors(option: str, it: object, facts: dict) -> list[str]:
     return [] if ok else [f"{fid}: quote not near line {d.get('line')} of {d.get('file')}"]
 
 
-def _other_errors(option: str, ev: dict, facts: dict) -> list[str]:
-    if _bad(option, ev):
-        return _bad(option, ev)
-    fails, g = facts.get("failures") or [], lambda k: str(ev.get(k) or "")
-    if option == "tests_wrong":
-        t = g("test")
-        return ([f"{t}: not a failing test"] * (t not in fails)
-                + [f"quote not in docs: {g('quote')}"] * (not quote_in(facts.get("docs") or [], g("quote"))))
-    if option == "code_wrong":
-        ids = ev.get("tests")
-        bad = [str(t) for t in ids or [] if t not in fails] if isinstance(ids, list) else [""]
-        return [f"tests: empty or not failing: {bad}"] if bad or not ids else []
-    if option == "escalate":
-        return [] if g("question").strip() else ["question: empty"]
-    if option == "architecture_stop":
-        p = Path(g("path"))
-        p = p if p.is_absolute() else Path(facts.get("run") or ".") / p
-        ok = g("path") and p.is_file() and p.match("architecture-change-*.md")
-        return [] if ok else [f"{g('path')}: not an existing architecture-change-*.md"]
-    ok = g("user_said").strip() and g("to") in (facts.get("resume") or [])
-    return [] if ok else [f"user_continue: empty user_said or {g('to')} not in resume"]
+def _tests_wrong(ev: dict, facts: dict) -> list[str]:
+    t, q = ev["test"], ev["quote"]
+    return ([f"{t}: not a failing test"] * (t not in (facts.get("failures") or []))
+            + [f"quote not in docs: {q}"] * (not quote_in(facts.get("docs") or [], q)))
+
+
+def _code_wrong(ev: dict, facts: dict) -> list[str]:
+    ids = ev.get("tests")
+    bad = [str(t) for t in ids if t not in (facts.get("failures") or [])] if isinstance(ids, list) else [""]
+    return [f"tests: empty or not failing: {bad}"] if bad or not ids else []
+
+
+def _architecture_stop(ev: dict, facts: dict) -> list[str]:
+    p = Path(ev["path"])
+    p = p if p.is_absolute() else Path(facts.get("run") or ".") / p
+    ok = p.is_file() and p.match("architecture-change-*.md")
+    return [] if ok else [f"{ev['path']}: not an existing architecture-change-*.md"]
+
+
+def _user_continue(ev: dict, facts: dict) -> list[str]:
+    ok = ev["to"] in (facts.get("resume") or [])
+    return [] if ok else [f"to: {ev['to']} not in resume"]
+
+
+_OTHER = {"tests_wrong": _tests_wrong, "code_wrong": _code_wrong, "escalate": lambda ev, facts: [],
+          "architecture_stop": _architecture_stop, "user_continue": _user_continue}
 
 
 def check_evidence(option: str, evidence: dict, facts: dict) -> list[str]:
@@ -82,8 +87,9 @@ def check_evidence(option: str, evidence: dict, facts: dict) -> list[str]:
     failures; "escalate" {question}: non-empty; "architecture_stop" {path}:
     existing architecture-change-*.md (absolute or under run); "user_continue"
     {user_said, to}: user_said non-empty, to in resume."""
-    if option in ("tests_wrong", "code_wrong", "escalate", "architecture_stop", "user_continue"):
-        return _other_errors(option, evidence if isinstance(evidence, dict) else {}, facts)
+    if option in _OTHER:
+        ev = evidence if isinstance(evidence, dict) else {}
+        return _bad(option, ev) or _OTHER[option](ev, facts)
     if option not in ("correct", "overstated", "wrong"):
         return [f"unknown option: {option}"]
     items = evidence.get("findings") if isinstance(evidence, dict) else None
