@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 MAX_LINES = 30
 
@@ -27,6 +27,11 @@ def without_deleted_files(counts: dict[str, int], name_status: str) -> dict[str,
     """counts with each wholly deleted file (status D in `git diff --name-status`) counted 0: deleting is not a change."""
     deleted = {line.split("\t", 1)[1] for line in name_status.splitlines() if line.startswith("D\t")}
     return {path: 0 if path in deleted else n for path, n in counts.items()}
+
+
+def without_test_files(counts: dict[str, int]) -> dict[str, int]:
+    """counts with every path that has `tests` among its directory components counted 0: tests don't count toward the cap."""
+    return {path: 0 if "tests" in PurePosixPath(path).parts[:-1] else n for path, n in counts.items()}
 
 
 def count_changed_lines(numstat: str) -> int:
@@ -56,7 +61,7 @@ def main() -> int:
     if first_commit() or merge_in_progress(Path(git("rev-parse", "--git-dir").strip())):
         return 0
     numstat, name_status = (git("diff", "--cached", flag, "-M") for flag in ("--numstat", "--name-status"))
-    counts = without_deleted_files(file_counts(numstat), name_status)
+    counts = without_test_files(without_deleted_files(file_counts(numstat), name_status))
     if sum(counts.values()) <= MAX_LINES:
         return 0
     lines = "\n".join(f"  {n:4d}  {path}" for path, n in counts.items())

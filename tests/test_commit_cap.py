@@ -80,3 +80,26 @@ def test_finishing_a_merge_is_exempt(tmp_path):
     _stage_lines(_with_first_commit(tmp_path), 31)
     (tmp_path / ".git" / "MERGE_HEAD").write_text("0" * 40 + "\n")
     assert _run_cap(tmp_path) == 0
+
+
+def test_us1_test_files_count_zero():
+    counts = cap.without_test_files({"tests/test_a.py": 40, "a/tests/b.py": 5, "tests.py": 3, "src/a.py": 2})
+    assert counts == {"tests/test_a.py": 0, "a/tests/b.py": 0, "tests.py": 3, "src/a.py": 2}
+
+
+def _stage_lines_at(repo: Path, rel: str, n: int) -> None:
+    """Stage n new lines in repo/rel."""
+    target = repo / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("".join(f"{i}\n" for i in range(n)))
+    subprocess.run(["git", "-C", str(repo), "add", rel], check=True)
+
+
+def test_us1_forty_lines_in_tests_dir_pass(tmp_path):
+    _stage_lines_at(_with_first_commit(tmp_path), "tests/t.py", 40)
+    assert _run_cap(tmp_path) == 0
+
+
+def test_us1_thirty_one_lines_in_evals_cases_still_block(tmp_path):
+    _stage_lines_at(_with_first_commit(tmp_path), "evals/cases/c.yaml", 31)
+    assert _run_cap(tmp_path) == 1
