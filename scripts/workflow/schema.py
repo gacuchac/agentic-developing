@@ -20,7 +20,10 @@ def check(schema: object, value: object, path: str = "") -> list[str]:
         return [f"{where}: expected {kind.__name__}, got {type(value).__name__}"]
     if isinstance(schema, list):
         return [e for i, v in enumerate(value) for e in check(schema[0], v, f"{path}[{i}]")]
-    join = lambda k: f"{path}.{k}" if path else str(k)
+
+    def join(k: object) -> str:
+        return f"{path}.{k}" if path else str(k)
+
     if len(schema) == 1 and isinstance(next(iter(schema)), type):  # {K: T}: check every key and value
         ((key_type, item),) = schema.items()
         bad_keys = [f"{join(k)}: key expected {key_type.__name__}" for k in value if not isinstance(k, key_type)]

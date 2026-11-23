@@ -35,7 +35,8 @@ def _bad(option: str, ev: dict) -> list[str]:
 
 
 def _item_errors(option: str, it: object, facts: dict) -> list[str]:
-    d = it if isinstance(it, dict) else {"id": it}; fid = d.get("id")
+    d = it if isinstance(it, dict) else {"id": it}
+    fid = d.get("id")
     if fid not in facts["fails"]:
         return [f"{fid}: not a failing finding"]
     errs = _bad(option, d) + ["line: must be an int"] * (option == "wrong" and type(d.get("line")) is not int)
@@ -72,7 +73,12 @@ def _user_continue(ev: dict, facts: dict) -> list[str]:
     return [] if ok else [f"to: {ev['to']} not in resume"]
 
 
-_OTHER = {"tests_wrong": _tests_wrong, "code_wrong": _code_wrong, "escalate": lambda ev, facts: [],
+def _escalate(_ev: dict, _facts: dict) -> list[str]:
+    """No errors: an escalation needs no evidence check here."""
+    return []
+
+
+_OTHER = {"tests_wrong": _tests_wrong, "code_wrong": _code_wrong, "escalate": _escalate,
           "architecture_stop": _architecture_stop, "user_continue": _user_continue}
 
 
@@ -82,7 +88,8 @@ def check_evidence(option: str, evidence: dict, facts: dict) -> list[str]:
     reason} for "overstated", {id, file, line, quote} for "wrong". Each id
     must be in facts["fails"]; reason non-blank; "wrong" ids not in
     facts["capped"], facts["read"](file) not None and quote_near holds.
-    Errors name the id or file; unknown option: an error. Also (facts failures, docs, run, resume): "tests_wrong" {test, quote}:
+    Errors name the id or file; unknown option: an error. Also (facts failures,
+    docs, run, resume): "tests_wrong" {test, quote}:
     test in failures, quote in docs; "code_wrong" {tests}: non-empty, all in
     failures; "escalate" {question}: non-empty; "architecture_stop" {path}:
     existing architecture-change-*.md (absolute or under run); "user_continue"
