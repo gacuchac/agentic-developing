@@ -35,6 +35,18 @@ def git(*args: str) -> str:
     return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
 
 
+def head_commit_problem(sha: str) -> str:
+    """Return "" when sha is HEAD and the working tree is clean (untracked files count as dirty).
+
+    Otherwise return a one-line reason: "<sha> is not HEAD" or that the tree has changes.
+    """
+    if sha != git("rev-parse", "HEAD").strip():
+        return f"{sha} is not HEAD"
+    if git("status", "--porcelain").strip():
+        return "the working tree has uncommitted or untracked changes"
+    return ""
+
+
 def collect_changes(base: str | None) -> str:
     """Diff of tracked changes against base (default HEAD) plus the content of new untracked files."""
     tracked = git("diff", base or "HEAD")
@@ -192,6 +204,8 @@ def main() -> int:
         sys.exit(f"Pass {args.pass_name} needs {', '.join(missing)}.")
     if args.commit:
         args.commit = git("rev-parse", "--verify", f"{args.commit}^{{commit}}").strip()
+        if problem := head_commit_problem(args.commit):
+            sys.exit(f"--commit refused: {problem}")
 
     if args.pass_name in NO_DIFF_PASSES:
         changes = ""

@@ -1,5 +1,7 @@
 import importlib.util
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 _path = Path(__file__).resolve().parents[1] / "scripts" / "codex_review.py"
@@ -127,3 +129,45 @@ def test_us4_uncommitted_changes_show_tracked_edit_and_untracked_file(tmp_path, 
 def test_us4_every_pass_has_a_prompt_file(tmp_path):
     for name in cr.PASSES:
         assert cr.pass_prompt_path(name, tmp_path).exists(), name
+
+
+def test_us3_non_head_sha_gets_a_reason_naming_it(tmp_path, monkeypatch):
+    _base, second, _third = _repo_with_three_commits(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    reason = cr.head_commit_problem(second)
+    assert reason and second in reason
+
+
+def test_us3_head_with_clean_tree_gives_no_problem(tmp_path, monkeypatch):
+    *_, third = _repo_with_three_commits(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert cr.head_commit_problem(third) == ""
+
+
+def test_us3_head_with_modified_tracked_file_gets_a_reason(tmp_path, monkeypatch):
+    *_, third = _repo_with_three_commits(tmp_path)
+    (tmp_path / "three.txt").write_text("changed\n")
+    monkeypatch.chdir(tmp_path)
+    assert cr.head_commit_problem(third) != ""
+
+
+def test_us3_head_with_untracked_file_gets_a_reason(tmp_path, monkeypatch):
+    *_, third = _repo_with_three_commits(tmp_path)
+    (tmp_path / "scratch.txt").write_text("new\n")
+    monkeypatch.chdir(tmp_path)
+    assert cr.head_commit_problem(third) != ""
+
+
+def test_us3_main_refuses_a_non_head_commit_before_codex(tmp_path):
+    _base, second, _third = _repo_with_three_commits(tmp_path)
+    env = {k: v for k, v in os.environ.items() if k not in ("CODEX_LUNA_MODEL", "CODEX_SOL_MODEL")}
+    run = subprocess.run(
+        [sys.executable, str(_path), "commit", "--commit", second, "--ask-file", "a", "--plan-file", "p"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert run.returncode != 0
+    assert "refused" in run.stderr
