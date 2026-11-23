@@ -96,3 +96,29 @@ def test_principles_read_workspace_then_project_claude_md(tmp_path):
     rules = cr.project_rules(tmp_path)
     assert "Coding principles" in rules and rules.endswith("project rule")
     assert cr.project_rules(cr.WORKSPACE).count("Coding principles") == 1
+
+
+def test_us4_tests_and_impl_need_ask_and_plan():
+    for name in ("tests", "impl"):
+        assert name in cr.PASSES
+        assert cr.missing_args(name, {}) == ["--ask-file", "--plan-file"]
+        assert cr.missing_args(name, {"ask_file": "a", "plan_file": "p"}) == []
+
+
+def test_us4_tests_and_impl_run_on_luna_not_sol(monkeypatch):
+    monkeypatch.setenv("CODEX_LUNA_MODEL", "luna-model")
+    monkeypatch.setenv("CODEX_SOL_MODEL", "sol-model")
+    for name in ("tests", "impl"):
+        assert name not in cr.SOL_PASSES and name not in cr.NO_DIFF_PASSES
+        assert cr.resolve_model(name, None) == "luna-model"
+
+
+def test_us4_uncommitted_changes_show_tracked_edit_and_untracked_file(tmp_path, monkeypatch):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _commit(tmp_path, "kept.txt", "old line\n", "US-1: add kept")
+    (tmp_path / "kept.txt").write_text("new line\n")
+    (tmp_path / "fresh.txt").write_text("brand new\n")
+    monkeypatch.chdir(tmp_path)
+    shown = cr.collect_changes(None)
+    assert "-old line" in shown and "+new line" in shown
+    assert "fresh.txt" in shown and "brand new" in shown

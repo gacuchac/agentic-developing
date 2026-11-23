@@ -13,13 +13,15 @@ import time
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[1]  # Developing/: run this script from inside a project
-PASSES = ("plan", "answers-ask", "commit", "pr", "alternatives", "principles", "ideas", "judge")
+PASSES = ("plan", "answers-ask", "commit", "pr", "alternatives", "principles", "ideas", "judge", "tests", "impl")
 NO_DIFF_PASSES = frozenset({"plan", "ideas", "judge"})
 SOL_PASSES = frozenset({"plan", "ideas", "pr"})  # every other pass runs on Luna
 REQUIRED = {
     "commit": ("commit", "ask_file", "plan_file"),
     "answers-ask": ("base", "ask_file", "plan_file"),
     "pr": ("base", "ask_file", "plan_file"),
+    "tests": ("ask_file", "plan_file"),
+    "impl": ("ask_file", "plan_file"),
 }
 
 
