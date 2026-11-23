@@ -119,3 +119,55 @@ def test_x8_staged_shebang_file_checked_from_staged_content(tmp_path, monkeypatc
     _stage(repo, "bin/tool", "#!/usr/bin/env python3\n" + SLOP, 0o755)
     _write_only(repo, "bin/tool", "#!/usr/bin/env python3\n" + CLEAN)
     assert _gate(repo, monkeypatch) == 1
+
+
+def test_x8_is_python_source_py_suffix():
+    assert gate.is_python_source("a/b.py", "anything\n") is True
+
+
+def test_x8_is_python_source_suffixless_python_shebang():
+    assert gate.is_python_source("tool", "#!/usr/bin/env python3\nprint(1)\n") is True
+    assert gate.is_python_source("tool", "#!/usr/bin/python\n") is True
+
+
+def test_x8_is_python_source_rejects_non_python():
+    assert gate.is_python_source("run", "#!/bin/sh\necho 1\n") is False
+    assert gate.is_python_source("plain", "just text\n") is False
+    assert gate.is_python_source("plain", "") is False
+    assert gate.is_python_source("README.md", "#!/usr/bin/env python3\n") is False
+    assert gate.is_python_source("tool", "x = 1\n#!/usr/bin/env python3\n") is False
+
+
+def test_x8_staged_shebang_blocks_even_if_working_tree_loses_shebang(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _stage(repo, "bin/tool", "#!/usr/bin/env python3\n" + SLOP, 0o755)
+    _write_only(repo, "bin/tool", "plain text\n")
+    assert _gate(repo, monkeypatch) == 1
+
+
+def test_x8_staged_file_deleted_from_working_tree_is_still_checked(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _stage(repo, "m.py", RUFF_ERROR)
+    (repo / "m.py").unlink()
+    assert _gate(repo, monkeypatch) == 1
+
+
+def test_x8_staged_binary_file_does_not_crash(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    (repo / "blob.bin").write_bytes(b"\xff\xfe\x00\x80\x81binary")
+    subprocess.run(["git", "-C", str(repo), "add", "blob.bin"], check=True)
+    assert _gate(repo, monkeypatch) == 0
+
+
+def test_x8_staged_binary_with_py_suffix_does_not_crash(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    (repo / "blob.py").write_bytes(b"\xff\xfe\x00\x80\x81")
+    subprocess.run(["git", "-C", str(repo), "add", "blob.py"], check=True)
+    assert _gate(repo, monkeypatch) in (0, 1)
+
+
+def test_x8_staged_suffixless_binary_does_not_crash(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    (repo / "blob").write_bytes(b"\xff\xfe\x00\x80\x81binary")
+    subprocess.run(["git", "-C", str(repo), "add", "blob"], check=True)
+    assert _gate(repo, monkeypatch) == 0

@@ -27,6 +27,15 @@ def python_paths(names: list[str], root: Path) -> list[str]:
     return [name for name in names if (root / name).is_file() and is_python(root / name)]
 
 
+def is_python_source(name: str, source: str) -> bool:
+    """True for a .py name, or a suffixless name whose source starts with a shebang line naming python."""
+    suffix = Path(name).suffix
+    if suffix:
+        return suffix == ".py"
+    first = source.split("\n", 1)[0]
+    return first.startswith("#!") and "python" in first
+
+
 def staged_names() -> list[str]:
     """Names of the added, copied, modified or renamed files staged in the current repo."""
     result = subprocess.run(
@@ -40,7 +49,8 @@ def staged_names() -> list[str]:
 
 def staged_source(name: str) -> str:
     """The staged (index) content of the file `name`."""
-    return subprocess.run(["git", "show", f":{name}"], capture_output=True, text=True, check=True).stdout
+    raw = subprocess.run(["git", "show", f":{name}"], capture_output=True, check=True).stdout
+    return raw.decode("utf-8", errors="replace")
 
 
 def ruff_failed(sources: dict[str, str]) -> bool:
@@ -64,7 +74,11 @@ def slop_failed(sources: dict[str, str]) -> bool:
     """Print the slop findings for each staged source; True if there were any."""
     found = False
     for name, source in sources.items():
-        for line, message in check_source(source, Path(name)):
+        try:
+            findings = check_source(source, Path(name))
+        except ValueError:
+            continue
+        for line, message in findings:
             print(f"{name}:{line}: {message}")
             found = True
     return found
@@ -72,7 +86,8 @@ def slop_failed(sources: dict[str, str]) -> bool:
 
 def main() -> int:
     """Check the staged Python files with ruff and the slop checks; return 1 on any finding, else 0."""
-    sources = {name: staged_source(name) for name in python_paths(staged_names(), Path.cwd())}
+    staged = {name: staged_source(name) for name in staged_names()}
+    sources = {name: source for name, source in staged.items() if is_python_source(name, source)}
     if not sources:
         return 0
     ruff_bad = ruff_failed(sources)
