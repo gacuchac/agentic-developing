@@ -33,8 +33,8 @@ def test_empty_numstat_counts_zero():
 def _stage_lines(repo: Path, n: int) -> None:
     """Make repo a git repo with n new lines staged."""
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    (repo / "f.txt").write_text("".join(f"{i}\n" for i in range(n)))
-    subprocess.run(["git", "-C", str(repo), "add", "f.txt"], check=True)
+    (repo / "f.py").write_text("".join(f"{i}\n" for i in range(n)))
+    subprocess.run(["git", "-C", str(repo), "add", "f.py"], check=True)
 
 
 def _run_cap(repo: Path) -> int:
@@ -102,4 +102,40 @@ def test_us1_forty_lines_in_tests_dir_pass(tmp_path):
 
 def test_us1_thirty_one_lines_in_evals_cases_still_block(tmp_path):
     _stage_lines_at(_with_first_commit(tmp_path), "evals/cases/c.yaml", 31)
+    assert _run_cap(tmp_path) == 1
+
+
+def test_x1_markdown_counts_zero_at_any_depth_and_any_case():
+    counts = cap.without_doc_files({"README.md": 50, "docs/a/b/c.md": 9, "NOTES.MD": 4, "x.Md": 2})
+    assert counts == {"README.md": 0, "docs/a/b/c.md": 0, "NOTES.MD": 0, "x.Md": 0}
+
+
+def test_x1_txt_rst_and_license_count_zero():
+    counts = cap.without_doc_files({"a.txt": 5, "docs/b.rst": 6, "C.TXT": 1, "LICENSE": 40, "sub/LICENSE": 7})
+    assert set(counts.values()) == {0}
+
+
+def test_x1_code_and_config_files_keep_their_counts():
+    original = {"a.py": 1, "pyproject.toml": 2, "c.json": 3, "run.sh": 4, ".githooks/pre-commit": 5}
+    assert cap.without_doc_files(original) == original
+
+
+def test_x1_input_is_not_mutated():
+    original = {"a.md": 10, "b.py": 3}
+    cap.without_doc_files(original)
+    assert original == {"a.md": 10, "b.py": 3}
+
+
+def _stage_two(repo: Path, doc_lines: int, py_lines: int) -> None:
+    _stage_lines_at(repo, "docs/guide.md", doc_lines)
+    _stage_lines_at(repo, "src/a.py", py_lines)
+
+
+def test_x1_two_hundred_markdown_lines_plus_ten_python_pass(tmp_path):
+    _stage_two(_with_first_commit(tmp_path), 200, 10)
+    assert _run_cap(tmp_path) == 0
+
+
+def test_x1_thirty_one_python_lines_still_block_beside_markdown(tmp_path):
+    _stage_two(_with_first_commit(tmp_path), 200, 31)
     assert _run_cap(tmp_path) == 1

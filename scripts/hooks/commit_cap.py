@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pre-commit check: block a commit whose staged changes exceed MAX_LINES changed lines."""
+"""Pre-commit check: block a commit whose staged changes exceed MAX_LINES changed lines of code (tests and documentation don't count)."""
 
 from __future__ import annotations
 
@@ -34,6 +34,15 @@ def without_test_files(counts: dict[str, int]) -> dict[str, int]:
     return {path: 0 if "tests" in PurePosixPath(path).parts[:-1] else n for path, n in counts.items()}
 
 
+DOC_SUFFIXES = {".md", ".txt", ".rst"}
+
+
+def without_doc_files(counts: dict[str, int]) -> dict[str, int]:
+    """counts with every .md, .txt or .rst path (any case) and every LICENSE file counted 0: documentation doesn't count toward the cap."""
+    docs = {p for p in counts if PurePosixPath(p).suffix.lower() in DOC_SUFFIXES or PurePosixPath(p).name == "LICENSE"}
+    return {path: 0 if path in docs else n for path, n in counts.items()}
+
+
 def count_changed_lines(numstat: str) -> int:
     """Total changed lines over all files, counted as in file_counts."""
     return sum(file_counts(numstat).values())
@@ -61,7 +70,7 @@ def main() -> int:
     if first_commit() or merge_in_progress(Path(git("rev-parse", "--git-dir").strip())):
         return 0
     numstat, name_status = (git("diff", "--cached", flag, "-M") for flag in ("--numstat", "--name-status"))
-    counts = without_test_files(without_deleted_files(file_counts(numstat), name_status))
+    counts = without_doc_files(without_test_files(without_deleted_files(file_counts(numstat), name_status)))
     if sum(counts.values()) <= MAX_LINES:
         return 0
     lines = "\n".join(f"  {n:4d}  {path}" for path, n in counts.items())
