@@ -21,6 +21,22 @@ This folder is the development workspace and its own git repo (`gacuchac/agentic
 - No subagent changes the solution architecture or the software architecture itself. It writes the proposed change to a file in the run folder and stops, and the main session brings it to me before anything goes on.
 - Functions don't depend on hidden state or on the internals of other functions; only on their contracts.
 - Workflow scripts are Python only.
+- If an instruction file (this one, `loop.md`, an agent or skill file) conflicts with the code, follow the code and report the conflicting line.
+
+## Rule → what enforces it
+A rule that matters is enforced by a check; prose is for judgement calls. When the same correction happens twice, move it into this table (`loop.md`, "Correction ratchet").
+
+| Rule | Enforced by |
+| --- | --- |
+| Public functions are typed and have a contract docstring | ruff `ANN`, `D1` (`ruff.toml`) |
+| One purpose per function, small enough to read | ruff `C901`, `PLR0911`–`PLR0915` |
+| No hidden or module-level mutable state, no `global` | `slop_checks.py` SLOP002 |
+| No comments that justify a workaround; no TODO/HACK markers or blanket `noqa` | `slop_checks.py` SLOP001, ruff `FIX`, `PGH` |
+| Pure workflow modules (`scripts/workflow/`) do no I/O | `slop_checks.py` SLOP003 |
+| At most 30 changed lines of code per commit | `pre-commit` (`commit_cap.py`) |
+| A commit subject names its story or subtask | `commit-msg` (`commit_msg.py`) |
+| A commit is reviewed before the next one is made | `pre-commit` (`review_gate.py`) |
+| Contracts stay stable unless an approved `architecture.md` covers the change | `principles` review P3 (judgement) |
 
 ## How work is routed
 You are the main orchestrator. For every feature or bug:
