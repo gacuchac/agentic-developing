@@ -11,6 +11,12 @@ Finding = tuple[int, str]
 
 JUSTIFICATION = re.compile(r"\b(workaround|for now|hack|temporary|temporarily|in case|quick fix)\b", re.IGNORECASE)
 
+LIST_MUTATORS = {"append", "extend", "insert", "pop", "clear", "remove"}
+
+SET_AND_DICT_MUTATORS = {"add", "discard", "update", "setdefault", "popitem"}
+
+MUTATING_METHODS = LIST_MUTATORS | SET_AND_DICT_MUTATORS
+
 FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 
@@ -43,6 +49,11 @@ def imported_modules(node: ast.AST) -> list[str]:
     if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
         return [node.module]
     return []
+
+
+def mutation_message(name: str) -> str:
+    """Return the SLOP002 message for a function that mutates module state name."""
+    return f"SLOP002 function mutates module state {name}: pass it in and return the result"
 
 
 def module_level_names(tree: ast.Module) -> set[str]:
@@ -92,3 +103,22 @@ def root_name(node: ast.AST) -> str | None:
     while isinstance(node, (ast.Attribute, ast.Subscript)):
         node = node.value
     return node.id if isinstance(node, ast.Name) else None
+
+
+def mutated_name(node: ast.AST) -> str | None:
+    """Return the name a statement or call node writes to, or None if it writes to none."""
+    targets: list[ast.AST] = []
+    if isinstance(node, ast.Assign):
+        targets = [t for t in node.targets if not isinstance(t, ast.Name)]
+    elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+        targets = [node.target]
+    elif isinstance(node, ast.Delete):
+        targets = node.targets
+    elif isinstance(node, ast.Call):
+        is_mutator = isinstance(node.func, ast.Attribute) and node.func.attr in MUTATING_METHODS
+        return root_name(node.func.value) if is_mutator else None
+    for target in targets:
+        name = root_name(target)
+        if name is not None:
+            return name
+    return None
