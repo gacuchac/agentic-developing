@@ -45,5 +45,20 @@
         ]
       }
     ]
+  },
+  "extraKnownMarketplaces": {
+    "cursor-plugins": {
+      "source": {"source": "github", "repo": "cursor/plugins", "ref": "7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9"}
+    },
+    "skills": {
+      "source": {"source": "github", "repo": "humanlayer/skills", "ref": "4d69d20f6e9b57b4fcf0d501ccfb1be961f0f329"}
+    }
+  },
+  "enabledPlugins": {
+    "pstack@cursor-plugins": true,
+    "show-me@skills": true,
+    "visual-pr@skills": true,
+    "improve-claude-md@skills": true,
+    "rpi@skills": true
   }
 }
