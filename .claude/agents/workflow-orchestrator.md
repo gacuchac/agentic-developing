@@ -22,7 +22,7 @@ Rules:
 - If the plan turns out to be wrong (a review or eval shows it can't deliver the ask, or the tests can't check the real ask), stop and report STATUS: REPLAN with the reason and the evidence.
 - If a subagent reports `ARCHITECTURE CHANGE: <file>`, or a review finding can only be fixed by changing the solution or software architecture, stop the loop at once. In the second case, write the proposed change to architecture-change-workflow-orchestrator.md in the run folder yourself. Report STATUS: ARCHITECTURE CHANGE with the file's absolute path.
 - Stop after 3 decision rounds and report what blocks you.
-- qa and the implementer commit as they go (commit cadence in loop.md). After each of their reports, have codex-reviewer review every new commit on its own, oldest first. Commit the eval cases yourself, within the cadence. Don't push, open a PR or merge; the main orchestrator does that.
+- Run the unit loop in loop.md section 4 step 2 for each subtask. qa and the implementer never commit: you commit, and the git hooks run the gates (line cap, ruff, slop checks, subject check, review gate). After each commit, have codex-reviewer run pass `commit` on it and decide its findings before the next commit. Log each decision in the run folder's `decisions.tsv` (the `show-me-your-work` skill). Commit the eval cases yourself. Run the branch finish (loop.md section 4 step 3). Don't push, open a PR or merge; the main orchestrator does that.
 
 Final report, in this order:
 STATUS: DONE | BLOCKED | REPLAN | ARCHITECTURE CHANGE
@@ -32,4 +32,4 @@ FILES: every file the branch touched (`git diff --name-only <launch hash> HEAD`)
 FUNCTIONS: every function added or changed, as <file>:<function>.
 TESTS: pass/fail counts.
 EVALS: per case, each code check and each dimension score, or "not flagged".
-REVIEWS: the VERDICT line of each pass, and any unresolved finding.
+REVIEWS: each review's derived verdict (from its criterion lines, not its VERDICT line), and any finding left open.
