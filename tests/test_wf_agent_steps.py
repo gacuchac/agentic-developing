@@ -185,3 +185,84 @@ def test_us10_validate_does_not_mutate_input():
     d = copy.deepcopy(QA)
     validate_result("qa", d)
     assert d == QA
+
+
+# ---- render_prompt (US-10) ----
+# No-commit phrase the default prompt must contain (case-insensitive): "do not commit".
+
+import json
+import re
+from pathlib import Path
+
+RUN = Path("/tmp/runs/proj/task-x")
+REPO = Path("/tmp/work/repo-y")
+UNIT = "### 3. thing\nLine two of the unit.\nFiles: `a.py`"
+
+
+def render(agent="qa", step="write", step_id="u3-qa-1", template=None, unit=UNIT):
+    return agent_steps.render_prompt(agent, step, step_id, RUN, REPO, unit, template)
+
+
+def result_block(text):
+    m = re.search(r"```workflow-result\s*\n(.*?)\n```", text, re.S)
+    assert m, "no fenced workflow-result block"
+    return json.loads(m.group(1))
+
+
+def test_us10_prompt_first_line_is_wf_step():
+    assert render().splitlines()[0] == "wf-step: u3-qa-1"
+
+
+def test_us10_prompt_first_line_follows_step_id():
+    a = render(step_id="u3-qa-1").splitlines()[0]
+    b = render(step_id="u4-impl-2").splitlines()[0]
+    assert b == "wf-step: u4-impl-2" and a != b
+
+
+@pytest.mark.parametrize("agent,step", [("qa", "write"), ("implementer", "green")])
+def test_us10_prompt_has_agent_step_run_repo_and_unit(agent, step):
+    out = render(agent, step)
+    assert agent in out and step in out
+    assert str(RUN) in out and str(REPO) in out
+    assert UNIT in out
+
+
+@pytest.mark.parametrize("agent,example", [("qa", QA), ("implementer", IMPL)])
+def test_us10_prompt_result_block_matches_schema(agent, example):
+    data = result_block(render(agent, "x"))
+    assert validate_result(agent, data) == []
+
+
+def test_us10_prompt_result_block_differs_per_agent():
+    assert result_block(render("qa")) != result_block(render("implementer"))
+
+
+@pytest.mark.parametrize("agent", ["qa", "implementer"])
+def test_us10_prompt_says_do_not_commit(agent):
+    assert "do not commit" in render(agent).lower()
+
+
+def test_us10_template_fills_placeholders_and_adds_nothing():
+    t = "S={step_id}|R={run}|P={repo}|U={unit}"
+    assert render(template=t) == f"S=u3-qa-1|R={RUN}|P={REPO}|U={UNIT}"
+
+
+def test_us10_template_replaces_default():
+    out = render(template="only {step_id}")
+    assert out == "only u3-qa-1"
+
+
+def test_us10_template_fills_schema():
+    out = render("qa", template="{schema}")
+    assert out.strip() and "{schema}" not in out and "tests_added" in out
+    out = render("implementer", template="{schema}")
+    assert "tests_run" in out
+
+
+def test_us10_template_without_placeholders_is_returned_as_is():
+    assert render(template="plain text") == "plain text"
+
+
+def test_us10_template_unknown_placeholder_raises_keyerror():
+    with pytest.raises(KeyError):
+        render(template="hello {nope}")
