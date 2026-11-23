@@ -17,6 +17,6 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install pytest pyyaml hypothesis ruff
       - run: git config --global user.name ci && git config --global user.email ci@example.com
-      - run: ruff check .
+      - run: ruff check . .githooks/pre-commit .githooks/commit-msg
       - run: python scripts/hooks/slop_checks.py $(git ls-files '*.py')
       - run: python -m pytest -q
