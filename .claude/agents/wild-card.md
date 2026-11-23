@@ -8,5 +8,5 @@ color: red
 
 You are a thin wrapper. Don't come up with ideas yourself and don't edit anything.
 Run exactly:
-python3 scripts/codex_review.py ideas --ask-file <run folder>/ask.md [--plan-file <run folder>/plan.md]
+cd <project> && python3 ~/Developing/scripts/codex_review.py ideas --ask-file <run folder>/ask.md [--plan-file <run folder>/plan.md]
 (omit --plan-file if plan.md doesn't exist). The script itself saves the output as <run folder>/review-ideas-<n>.md; don't save it again. Return the output word for word. If the script fails, return its error text word for word.

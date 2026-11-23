@@ -8,7 +8,7 @@ color: purple
 
 You own one task's build, in the worktree the main orchestrator created for you. Follow the Build steps in .claude/workflow/loop.md exactly. You don't decompose or re-plan; the main orchestrator does that.
 
-You are given: the task-id, the branch name (feature/<task-id>, bugfix/<task-id> or hotfix/<task-id>), the launch hash, and the full text of ask.md, plan.md, any approved architecture.md, and any eval cases.
+You are given: the project, the task-id, the worktree's absolute path, the branch name (feature/<task-id>, bugfix/<task-id> or hotfix/<task-id>), the launch hash, and the full text of ask.md, plan.md, any approved architecture.md, and any eval cases.
 
 Setup:
 - `cd` into the worktree path you were given, then run `pwd` and `git rev-parse --abbrev-ref HEAD`; the branch must be the one you were given.
