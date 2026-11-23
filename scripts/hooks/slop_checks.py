@@ -8,7 +8,7 @@ import tokenize
 
 Finding = tuple[int, str]
 
-JUSTIFICATION = re.compile(r"workaround|for now|hack|temporary|temporarily|in case|quick fix", re.IGNORECASE)
+JUSTIFICATION = re.compile(r"\b(workaround|for now|hack|temporary|temporarily|in case|quick fix)\b", re.IGNORECASE)
 
 
 def justification_comments(source: str) -> list[Finding]:
