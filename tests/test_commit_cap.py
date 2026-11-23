@@ -36,14 +36,37 @@ def _run_cap(repo: Path) -> int:
     return subprocess.run([sys.executable, str(_path)], cwd=repo, capture_output=True, check=False).returncode
 
 
+def _with_first_commit(repo: Path) -> Path:
+    """Give repo a first commit, so the cap applies to what is staged next."""
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "start",
+        ],
+        check=True,
+    )
+    return repo
+
+
 def test_thirty_lines_pass_and_thirty_one_block(tmp_path):
-    _stage_lines(tmp_path / "ok", 30)
-    _stage_lines(tmp_path / "big", 31)
+    _stage_lines(_with_first_commit(tmp_path / "ok"), 30)
+    _stage_lines(_with_first_commit(tmp_path / "big"), 31)
     assert _run_cap(tmp_path / "ok") == 0
     assert _run_cap(tmp_path / "big") == 1
 
 
 def test_finishing_a_merge_is_exempt(tmp_path):
-    _stage_lines(tmp_path, 31)
+    _stage_lines(_with_first_commit(tmp_path), 31)
     (tmp_path / ".git" / "MERGE_HEAD").write_text("0" * 40 + "\n")
     assert _run_cap(tmp_path) == 0
