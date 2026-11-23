@@ -76,7 +76,11 @@ def cap_reached(entries: list[dict], node: str) -> bool:
 
 
 def wrong_dismissals(entries: list[dict]) -> dict[str, int]:
-    """Count per pass the finding ids dismissed as "wrong" in decision entries; input is not mutated."""
+    """Count per pass the finding ids dismissed as "wrong" in decision entries; input is not mutated.
+
+    Reads, from each entry with `decision == "wrong"`: `evidence["findings"]` (the dismissed
+    finding ids) and `passes`, a mapping finding id -> review pass. Other entries are ignored.
+    """
     counts: dict[str, int] = {}
     for e in entries:
         if e.get("decision") == "wrong":
@@ -87,7 +91,11 @@ def wrong_dismissals(entries: list[dict]) -> dict[str, int]:
 
 
 def undismissed(entries: list[dict], node: str, fails: list[str]) -> list[str]:
-    """Return the ids in `fails`, in order, not dismissed (wrong or overstated) at `node` since the last review entry."""
+    """Return the ids in `fails`, in order, not dismissed (wrong or overstated) at `node` since the last review entry.
+
+    A review entry is any entry with a `"reviews"` key; only entries after the last one count.
+    Reads from those: `node`, `decision` (in "wrong" or "overstated") and `evidence["findings"]`.
+    """
     start = max((i + 1 for i, e in enumerate(entries) if "reviews" in e), default=0)
     gone = {
         f
