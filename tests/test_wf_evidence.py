@@ -292,3 +292,158 @@ def test_us9_wrong_several_bad_one_error_each():
     assert len(errs) >= 3
     for k in ("X1", "nope.py"):
         assert any(k in e for e in errs)
+
+
+# check_evidence: tests_wrong, code_wrong, escalate, architecture_stop, user_continue (US-9)
+PLAN = "The tool must refuse an empty name.\nIt logs every call."
+ASK = "Also keep the output sorted by date."
+
+
+def dfacts(tmp_path, **over):
+    f = {"failures": ["tests/t.py::test_a", "tests/t.py::test_b"], "docs": [PLAN, ASK],
+         "run": tmp_path, "resume": ["write_unit", "qa"]}
+    f.update(over)
+    return f
+
+
+def chk(option, ev, tmp_path, **over):
+    return evidence.check_evidence(option, ev, dfacts(tmp_path, **over))
+
+
+def tw(test="tests/t.py::test_a", quote="refuse an empty name"):
+    return {"test": test, "quote": quote}
+
+
+def test_us9_tests_wrong_good_returns_empty(tmp_path):
+    assert chk("tests_wrong", tw(), tmp_path) == []
+
+
+def test_us9_tests_wrong_quote_in_second_doc_passes(tmp_path):
+    assert chk("tests_wrong", tw(quote="sorted by date"), tmp_path) == []
+
+
+def test_us9_tests_wrong_test_not_a_failure_fails(tmp_path):
+    errs = chk("tests_wrong", tw(test="tests/t.py::test_zzz"), tmp_path)
+    assert errs and any("test_zzz" in e for e in errs)
+
+
+def test_us9_tests_wrong_quote_not_in_docs_fails(tmp_path):
+    errs = chk("tests_wrong", tw(quote="never written anywhere"), tmp_path)
+    assert errs and any("never written anywhere" in e for e in errs)
+
+
+def test_us9_tests_wrong_empty_quote_fails(tmp_path):
+    assert chk("tests_wrong", tw(quote=""), tmp_path)
+
+
+def test_us9_tests_wrong_missing_keys_return_errors(tmp_path):
+    assert chk("tests_wrong", {}, tmp_path)
+    assert chk("tests_wrong", {"test": "tests/t.py::test_a"}, tmp_path)
+    assert chk("tests_wrong", {"quote": "refuse"}, tmp_path)
+
+
+def test_us9_code_wrong_good_returns_empty(tmp_path):
+    ev = {"tests": ["tests/t.py::test_a", "tests/t.py::test_b"]}
+    assert chk("code_wrong", ev, tmp_path) == []
+
+
+def test_us9_code_wrong_empty_list_fails(tmp_path):
+    assert chk("code_wrong", {"tests": []}, tmp_path)
+
+
+def test_us9_code_wrong_unknown_id_fails_naming_it(tmp_path):
+    errs = chk("code_wrong", {"tests": ["tests/t.py::test_a", "tests/t.py::nope"]}, tmp_path)
+    assert errs and any("nope" in e for e in errs)
+
+
+def test_us9_code_wrong_missing_tests_key_returns_errors(tmp_path):
+    assert chk("code_wrong", {}, tmp_path)
+
+
+def test_us9_escalate_good_returns_empty(tmp_path):
+    assert chk("escalate", {"question": "Which format should dates use?"}, tmp_path) == []
+
+
+def test_us9_escalate_empty_question_fails(tmp_path):
+    assert chk("escalate", {"question": ""}, tmp_path)
+
+
+def test_us9_escalate_whitespace_question_fails(tmp_path):
+    assert chk("escalate", {"question": " \t\n "}, tmp_path)
+
+
+def test_us9_escalate_missing_question_returns_errors(tmp_path):
+    assert chk("escalate", {}, tmp_path)
+
+
+def test_us9_architecture_stop_relative_path_good(tmp_path):
+    (tmp_path / "architecture-change-impl.md").write_text("x")
+    assert chk("architecture_stop", {"path": "architecture-change-impl.md"}, tmp_path) == []
+
+
+def test_us9_architecture_stop_relative_subdir_path_good(tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "architecture-change-a.md").write_text("x")
+    assert chk("architecture_stop", {"path": "sub/architecture-change-a.md"}, tmp_path) == []
+
+
+def test_us9_architecture_stop_absolute_path_good(tmp_path):
+    other = tmp_path / "elsewhere"
+    other.mkdir()
+    p = other / "architecture-change-qa.md"
+    p.write_text("x")
+    run = tmp_path / "run"
+    run.mkdir()
+    assert chk("architecture_stop", {"path": str(p)}, tmp_path, run=run) == []
+
+
+def test_us9_architecture_stop_missing_file_fails(tmp_path):
+    errs = chk("architecture_stop", {"path": "architecture-change-gone.md"}, tmp_path)
+    assert errs and any("architecture-change-gone.md" in e for e in errs)
+
+
+def test_us9_architecture_stop_wrong_name_fails(tmp_path):
+    (tmp_path / "notes.md").write_text("x")
+    errs = chk("architecture_stop", {"path": "notes.md"}, tmp_path)
+    assert errs and any("notes.md" in e for e in errs)
+
+
+def test_us9_architecture_stop_wrong_extension_fails(tmp_path):
+    (tmp_path / "architecture-change-a.txt").write_text("x")
+    assert chk("architecture_stop", {"path": "architecture-change-a.txt"}, tmp_path)
+
+
+def test_us9_architecture_stop_missing_path_returns_errors(tmp_path):
+    assert chk("architecture_stop", {}, tmp_path)
+
+
+def test_us9_user_continue_good_returns_empty(tmp_path):
+    assert chk("user_continue", {"user_said": "go ahead", "to": "qa"}, tmp_path) == []
+
+
+def test_us9_user_continue_empty_user_said_fails(tmp_path):
+    assert chk("user_continue", {"user_said": "", "to": "qa"}, tmp_path)
+    assert chk("user_continue", {"user_said": "  ", "to": "qa"}, tmp_path)
+
+
+def test_us9_user_continue_to_not_in_resume_fails_naming_it(tmp_path):
+    errs = chk("user_continue", {"user_said": "go", "to": "merge_all"}, tmp_path)
+    assert errs and any("merge_all" in e for e in errs)
+
+
+def test_us9_user_continue_missing_keys_return_errors(tmp_path):
+    assert chk("user_continue", {}, tmp_path)
+    assert chk("user_continue", {"user_said": "go"}, tmp_path)
+
+
+def test_us9_new_options_unknown_option_fails(tmp_path):
+    errs = chk("bogus_option", {"question": "q"}, tmp_path)
+    assert errs and any("bogus_option" in e for e in errs)
+
+
+def test_us9_new_options_missing_facts_return_errors_not_exceptions(tmp_path):
+    cases = {"tests_wrong": tw(), "code_wrong": {"tests": ["tests/t.py::test_a"]},
+             "architecture_stop": {"path": "architecture-change-a.md"},
+             "user_continue": {"user_said": "go", "to": "qa"}}
+    for opt, ev in cases.items():
+        assert evidence.check_evidence(opt, ev, {}), opt
