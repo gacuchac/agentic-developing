@@ -5,6 +5,7 @@ Rules: main takes only uat; uat takes dev or hotfix/*; dev takes feature/*,
 bugfix/* or hotfix/*. Other target branches are not checked.
 Reads BASE_REF, HEAD_REF, HEAD_REPO and REPO from the environment.
 """
+
 import os
 import sys
 

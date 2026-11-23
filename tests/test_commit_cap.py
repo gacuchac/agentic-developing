@@ -33,7 +33,7 @@ def _stage_lines(repo: Path, n: int) -> None:
 
 
 def _run_cap(repo: Path) -> int:
-    return subprocess.run([sys.executable, str(_path)], cwd=repo, capture_output=True).returncode
+    return subprocess.run([sys.executable, str(_path)], cwd=repo, capture_output=True, check=False).returncode
 
 
 def test_thirty_lines_pass_and_thirty_one_block(tmp_path):

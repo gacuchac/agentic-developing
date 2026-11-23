@@ -149,6 +149,7 @@ def run_codex(prompt: str, model: str) -> tuple[int, str]:
             input=prompt,
             text=True,
             capture_output=True,
+            check=False,
         )
         message = out.read_text() if out.exists() else result.stderr
         return result.returncode, message

@@ -22,7 +22,9 @@ def _commit(repo: Path, name: str, text: str, message: str) -> str:
     (repo / name).write_text(text)
     for cmd in (["add", name], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", message]):
         subprocess.run(["git", "-C", str(repo), *cmd], check=True)
-    return subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    return subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+    ).stdout.strip()
 
 
 def _repo_with_three_commits(repo: Path) -> list[str]:
@@ -31,7 +33,7 @@ def _repo_with_three_commits(repo: Path) -> list[str]:
 
 
 def test_commit_review_shows_only_that_commit_after_earlier_log(tmp_path, monkeypatch):
-    base, second, third = _repo_with_three_commits(tmp_path)
+    base, _second, third = _repo_with_three_commits(tmp_path)
     monkeypatch.chdir(tmp_path)
     shown = cr.commit_changes(third, base)
     assert "US-1: add two" in shown.split("### This commit")[0]

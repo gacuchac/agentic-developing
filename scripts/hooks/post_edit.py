@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """PostToolUse hook: format and lint a Python file Claude just edited; exit 2 shows problems to Claude."""
+
 from __future__ import annotations
 
 import json
@@ -21,8 +22,8 @@ def find_ruff() -> str | None:
 
 def lint(ruff: str, path: str) -> subprocess.CompletedProcess:
     """Format the file, then lint it."""
-    subprocess.run([ruff, "format", path], capture_output=True)
-    return subprocess.run([ruff, "check", path], capture_output=True, text=True)
+    subprocess.run([ruff, "format", path], capture_output=True, check=False)
+    return subprocess.run([ruff, "check", path], capture_output=True, text=True, check=False)
 
 
 def main() -> int:
