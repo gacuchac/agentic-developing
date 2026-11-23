@@ -422,3 +422,138 @@ def test_us7_undismissed_does_not_mutate_inputs():
     fails = ["T1", "T2"]
     graph.undismissed(entries, "tests_decide", fails)
     assert fails == ["T1", "T2"] and len(entries) == 2
+
+
+def _wrongs(pass_, n, node="tests_decide"):
+    return [_dismiss("wrong", [f"{pass_}{i}"], node=node, pass_=pass_) for i in range(n)]
+
+
+def _qa_back():
+    return _back("tests_decide", "correct", "qa_write")
+
+
+STOP_LIST = ["escalate", "architecture_stop"]
+
+
+def test_us7_options_tests_decide_no_history():
+    assert graph.legal_options("tests_decide", [], set()) == [
+        "correct", "overstated", "wrong", "escalate", "architecture_stop"]
+
+
+def test_us7_options_follow_edges_order_for_every_decide_node():
+    for node in EDGES:
+        if graph.kind(node) == "decide":
+            assert graph.legal_options(node, [], set()) == list(EDGES[node])
+
+
+def test_us7_options_uncovered_leaves_only_architecture_stop():
+    assert graph.legal_options("tests_decide", [], {"f"}) == ["architecture_stop"]
+    assert graph.legal_options("full_decide", [], {"a", "b"}) == ["architecture_stop"]
+
+
+def test_us7_options_cap_reached_leaves_escalate_and_architecture_stop():
+    entries = [_qa_back()] * 3
+    assert graph.legal_options("tests_decide", entries, set()) == STOP_LIST
+
+
+def test_us7_options_under_cap_keeps_all_edges():
+    entries = [_qa_back()] * 2
+    assert graph.legal_options("tests_decide", entries, set()) == list(EDGES["tests_decide"])
+
+
+def test_us7_options_cap_on_fail_decide_and_impl_decide():
+    assert graph.legal_options("fail_decide", [_back("fail_decide", "code_wrong", "implement")] * 3, set()) == STOP_LIST
+    assert graph.legal_options("impl_decide", [_impl_back()] * 3, set()) == STOP_LIST
+
+
+def test_us7_options_cap_after_user_continue_is_reset():
+    entries = [_qa_back()] * 3 + [_user_continue("qa_write")]
+    assert graph.legal_options("tests_decide", entries, set()) == list(EDGES["tests_decide"])
+
+
+def test_us7_options_two_wrong_dismissals_remove_wrong():
+    assert graph.legal_options("tests_decide", _wrongs("tests", 2), set()) == [
+        "correct", "overstated", "escalate", "architecture_stop"]
+
+
+def test_us7_options_one_wrong_dismissal_keeps_wrong():
+    assert "wrong" in graph.legal_options("tests_decide", _wrongs("tests", 1), set())
+
+
+def test_us7_options_wrong_dismissals_of_other_pass_do_not_count():
+    assert "wrong" in graph.legal_options("tests_decide", _wrongs("impl", 2, "impl_decide"), set())
+
+
+def test_us7_options_impl_decide_two_wrong_removes_wrong():
+    assert graph.legal_options("impl_decide", _wrongs("impl", 2, "impl_decide"), set()) == [
+        "correct", "overstated", "escalate", "architecture_stop"]
+
+
+def test_us7_options_commit_decide_keeps_wrong_while_alternatives_under_cap():
+    entries = _wrongs("commit", 2, "commit_decide") + _wrongs("principles", 2, "commit_decide")
+    entries += _wrongs("alternatives", 1, "commit_decide")
+    assert graph.legal_options("commit_decide", entries, set()) == list(EDGES["commit_decide"])
+
+
+def test_us7_options_commit_decide_drops_wrong_when_all_passes_at_cap():
+    entries = []
+    for p in ("commit", "principles", "alternatives"):
+        entries += _wrongs(p, 2, "commit_decide")
+    assert graph.legal_options("commit_decide", entries, set()) == [
+        "correct", "overstated", "escalate", "architecture_stop"]
+
+
+def test_us7_options_commit_decide_no_history_has_wrong():
+    assert graph.legal_options("commit_decide", [], set()) == [
+        "correct", "overstated", "wrong", "escalate", "architecture_stop"]
+
+
+def test_us7_options_decide_without_review_pass_never_loses_wrong_rule():
+    assert graph.legal_options("full_decide", [], set()) == ["code_wrong", "escalate", "architecture_stop"]
+    assert graph.legal_options("red_decide", [], set()) == list(EDGES["red_decide"])
+
+
+def test_us7_options_uncovered_beats_cap():
+    assert graph.legal_options("tests_decide", [_qa_back()] * 3, {"f"}) == ["architecture_stop"]
+
+
+def test_us7_options_cap_beats_wrong_rule():
+    entries = [_qa_back()] * 3 + _wrongs("tests", 2)
+    assert graph.legal_options("tests_decide", entries, set()) == STOP_LIST
+
+
+def test_us7_options_uncovered_beats_cap_and_wrong_rule():
+    entries = [_qa_back()] * 3 + _wrongs("tests", 2)
+    assert graph.legal_options("tests_decide", entries, {"f"}) == ["architecture_stop"]
+
+
+def test_us7_options_user_gives_user_continue():
+    assert graph.legal_options("user", [], set()) == ["user_continue"]
+    assert graph.legal_options("user", [_qa_back()] * 3, {"f"}) == ["user_continue"]
+
+
+def test_us7_options_done_has_none():
+    assert graph.legal_options("done", [], set()) == []
+
+
+def test_us7_options_agent_nodes_have_none():
+    assert graph.legal_options("qa_write", [], set()) == []
+    assert graph.legal_options("implement", [], {"f"}) == []
+
+
+def test_us7_options_stalled_commit_offers_escalate_and_architecture_stop():
+    assert graph.legal_options("commit", [], set()) == ["escalate", "architecture_stop"]
+
+
+def test_us7_options_every_auto_node_gives_the_stops():
+    for node in EDGES:
+        if graph.kind(node) == "auto":
+            assert graph.legal_options(node, [], set()) == STOP_LIST
+
+
+def test_us7_options_returns_a_fresh_list_and_keeps_inputs():
+    entries, unc = [_qa_back()] * 3, {"f"}
+    first = graph.legal_options("commit", entries, unc)
+    first.append("x")
+    assert graph.legal_options("commit", entries, unc) == STOP_LIST
+    assert entries == [_qa_back()] * 3 and unc == {"f"}

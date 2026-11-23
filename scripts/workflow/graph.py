@@ -104,3 +104,23 @@ def undismissed(entries: list[dict], node: str, fails: list[str]) -> list[str]:
         for f in e["evidence"]["findings"]
     }
     return [f for f in fails if f not in gone]
+
+
+def legal_options(node: str, entries: list[dict], uncovered: set[str]) -> list[str]:
+    """Return a fresh list of the options `node` offers given the history `entries` and `uncovered` contract ids.
+
+    Non-decide nodes: "user" gives ["user_continue"], "auto" gives list(STOPS), others give [].
+    Decide nodes, first match wins: non-empty `uncovered` gives ["architecture_stop"]; cap_reached
+    gives list(STOPS); else the node's edge keys, minus "wrong" once every pass of its review
+    reached WRONG_CAP wrong dismissals (see wrong_dismissals). Inputs are not mutated.
+    """
+    k = kind(node)
+    if k != "decide":
+        return {"user": ["user_continue"], "auto": list(STOPS)}.get(k, [])
+    if uncovered:
+        return ["architecture_stop"]
+    if cap_reached(entries, node):
+        return list(STOPS)
+    counts = wrong_dismissals(entries)
+    spent = all(counts.get(p, 0) >= WRONG_CAP for p in REVIEW_PASSES[DECIDES_ON[node]]) if node in DECIDES_ON else False
+    return [o for o in EDGES[node] if not (o == "wrong" and spent)]
