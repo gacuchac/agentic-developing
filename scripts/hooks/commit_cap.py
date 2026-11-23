@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Pre-commit check: block a commit whose staged changes exceed MAX_LINES changed lines of code (tests and documentation don't count)."""
+"""Pre-commit check: block a commit whose staged changes exceed MAX_LINES lines.
+
+Tests and documentation don't count.
+"""
 
 from __future__ import annotations
 
@@ -24,13 +27,19 @@ def file_counts(numstat: str) -> dict[str, int]:
 
 
 def without_deleted_files(counts: dict[str, int], name_status: str) -> dict[str, int]:
-    """counts with each wholly deleted file (status D in `git diff --name-status`) counted 0: deleting is not a change."""
+    """counts with each wholly deleted file counted 0: deleting is not a change.
+
+    Deleted means status D in `git diff --name-status`.
+    """
     deleted = {line.split("\t", 1)[1] for line in name_status.splitlines() if line.startswith("D\t")}
     return {path: 0 if path in deleted else n for path, n in counts.items()}
 
 
 def without_test_files(counts: dict[str, int]) -> dict[str, int]:
-    """counts with every path that has `tests` among its directory components counted 0: tests don't count toward the cap."""
+    """counts with every path under a `tests` directory counted 0.
+
+    Tests don't count toward the cap.
+    """
     return {path: 0 if "tests" in PurePosixPath(path).parts[:-1] else n for path, n in counts.items()}
 
 
@@ -38,7 +47,10 @@ DOC_SUFFIXES = {".md", ".txt", ".rst"}
 
 
 def without_doc_files(counts: dict[str, int]) -> dict[str, int]:
-    """counts with every .md, .txt or .rst path (any case) and every LICENSE file counted 0: documentation doesn't count toward the cap."""
+    """counts with every .md, .txt or .rst path (any case) and every LICENSE file counted 0.
+
+    Documentation doesn't count toward the cap.
+    """
     docs = {p for p in counts if PurePosixPath(p).suffix.lower() in DOC_SUFFIXES or PurePosixPath(p).name == "LICENSE"}
     return {path: 0 if path in docs else n for path, n in counts.items()}
 

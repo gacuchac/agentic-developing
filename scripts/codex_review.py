@@ -183,12 +183,14 @@ def save_output(folder: Path, pass_name: str, model: str, base: str | None, code
     while (folder / f"review-{pass_name}-{n}.md").exists():
         n += 1
     path = folder / f"review-{pass_name}-{n}.md"
-    header = f"<!-- pass: {pass_name} | model: {model} | base: {base or 'HEAD'} | exit: {code} | {time.strftime('%Y-%m-%d %H:%M:%S')} -->\n"
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    header = f"<!-- pass: {pass_name} | model: {model} | base: {base or 'HEAD'} | exit: {code} | {stamp} -->\n"
     path.write_text(header + message)
     return path
 
 
 def main() -> int:
+    """Run one review pass from the command line; return the process exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pass_name", choices=PASSES)
     parser.add_argument("--ask-file")
