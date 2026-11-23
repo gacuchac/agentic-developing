@@ -10,7 +10,7 @@ import tempfile
 import time
 from pathlib import Path
 
-PASSES_DIR = Path(".claude/review-passes")
+WORKSPACE = Path(__file__).resolve().parents[1]  # Developing/: run this script from inside a project
 PASSES = ("plan", "answers-ask", "commit", "pr", "alternatives", "principles", "ideas", "judge")
 NO_DIFF_PASSES = frozenset({"plan", "ideas", "judge"})
 SOL_PASSES = frozenset({"plan", "ideas", "pr"})  # every other pass runs on Luna
@@ -76,6 +76,12 @@ def branch_overview(base: str, folder: Path | None) -> str:
     return f"### Commits since {base}\n{log}\n### Per-commit review verdicts\n{verdicts or '(none saved)'}"
 
 
+def pass_prompt_path(pass_name: str, project: Path) -> Path:
+    """The pass prompt: the project's own .claude/review-passes/<pass>.md if it has one, else the workspace's."""
+    own = project / ".claude" / "review-passes" / f"{pass_name}.md"
+    return own if own.exists() else WORKSPACE / ".claude" / "review-passes" / f"{pass_name}.md"
+
+
 def read_optional(path: str | None) -> str:
     """Return a file's text, or an empty string when no path or no file."""
     return Path(path).read_text() if path and Path(path).exists() else ""
@@ -84,7 +90,7 @@ def read_optional(path: str | None) -> str:
 def build_prompt(pass_name: str, ask: str, plan: str, principles: str, changes: str, extra: str) -> str:
     """Assemble the prompt from the pass instructions and whatever context is present."""
     sections = (
-        (PASSES_DIR / f"{pass_name}.md").read_text(),
+        pass_prompt_path(pass_name, Path.cwd()).read_text(),
         f"## Original ask\n{ask}" if ask else "",
         f"## Plan\n{plan}" if plan else "",
         f"## Project principles (CLAUDE.md)\n{principles}" if principles else "",

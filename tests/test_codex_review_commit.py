@@ -70,3 +70,11 @@ def test_pr_changes_leave_out_target_commits_merged_in(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     changes = cr.pr_changes("dev")
     assert "+mine" in changes and "+theirs" not in changes and "uncommitted" not in changes
+
+
+def test_pass_prompt_comes_from_workspace_unless_project_overrides(tmp_path):
+    assert cr.pass_prompt_path("judge", tmp_path) == cr.WORKSPACE / ".claude" / "review-passes" / "judge.md"
+    own = tmp_path / ".claude" / "review-passes" / "judge.md"
+    own.parent.mkdir(parents=True)
+    own.write_text("project judge")
+    assert cr.pass_prompt_path("judge", tmp_path) == own
