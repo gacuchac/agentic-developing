@@ -27,6 +27,17 @@ def python_paths(names: list[str], root: Path) -> list[str]:
     return [name for name in names if (root / name).is_file() and is_python(root / name)]
 
 
+def staged_names() -> list[str]:
+    """Names of the added, copied, modified or renamed files staged in the current repo."""
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.splitlines()
+
+
 def ruff_failed(paths: list[str]) -> bool:
     """Run ruff check on the paths and print its findings; True if it reported any."""
     ruff = find_ruff()
@@ -48,3 +59,17 @@ def slop_failed(paths: list[str]) -> bool:
             print(f"{path}:{line}: {message}")
             found = True
     return found
+
+
+def main() -> int:
+    """Check the staged Python files with ruff and the slop checks; return 1 on any finding, else 0."""
+    paths = python_paths(staged_names(), Path.cwd())
+    if not paths:
+        return 0
+    ruff_bad = ruff_failed(paths)
+    slop_bad = slop_failed(paths)
+    return 1 if ruff_bad or slop_bad else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

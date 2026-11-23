@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Git pre-commit hook for every repo under Developing/: block commits over 30 changed lines.
+"""Git pre-commit hook for every repo under Developing/: the commit cap, then ruff and slop checks.
 
-Runs the workspace's own scripts/hooks/commit_cap.py, found next to this hook, in the committing repo.
+Runs the workspace's own scripts, found next to this hook, in the committing repo.
 """
 import subprocess
 import sys
 from pathlib import Path
 
-CAP = Path(__file__).resolve().parents[1] / "scripts" / "hooks" / "commit_cap.py"
-sys.exit(subprocess.call([sys.executable, str(CAP)]))
+HOOKS = Path(__file__).resolve().parents[1] / "scripts" / "hooks"
+failed = [subprocess.call([sys.executable, str(HOOKS / name)]) for name in ("commit_cap.py", "lint_gate.py")]
+sys.exit(1 if any(failed) else 0)
