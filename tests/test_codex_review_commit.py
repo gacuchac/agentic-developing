@@ -122,3 +122,8 @@ def test_us4_uncommitted_changes_show_tracked_edit_and_untracked_file(tmp_path, 
     shown = cr.collect_changes(None)
     assert "-old line" in shown and "+new line" in shown
     assert "fresh.txt" in shown and "brand new" in shown
+
+
+def test_us4_every_pass_has_a_prompt_file(tmp_path):
+    for name in cr.PASSES:
+        assert cr.pass_prompt_path(name, tmp_path).exists(), name
