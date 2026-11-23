@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Code checks for one eval run: tool-call count, redundant calls, token and time budgets."""
+
 from __future__ import annotations
 
 import json
@@ -28,9 +29,7 @@ def redundant_calls(calls: list[dict]) -> list[str]:
 
 def total_tokens(events: list[dict]) -> int:
     """Input plus output tokens over all model calls."""
-    return sum(
-        e.get("input_tokens", 0) + e.get("output_tokens", 0) for e in events if e.get("type") == "model_call"
-    )
+    return sum(e.get("input_tokens", 0) + e.get("output_tokens", 0) for e in events if e.get("type") == "model_call")
 
 
 def elapsed_seconds(events: list[dict]) -> float:

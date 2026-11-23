@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run one targeted Codex review pass and print Codex's final message."""
+
 from __future__ import annotations
 
 import argparse
@@ -15,8 +16,11 @@ WORKSPACE = Path(__file__).resolve().parents[1]  # Developing/: run this script 
 PASSES = ("plan", "answers-ask", "commit", "pr", "alternatives", "principles", "ideas", "judge")
 NO_DIFF_PASSES = frozenset({"plan", "ideas", "judge"})
 SOL_PASSES = frozenset({"plan", "ideas", "pr"})  # every other pass runs on Luna
-REQUIRED = {"commit": ("commit", "ask_file", "plan_file"), "answers-ask": ("base", "ask_file", "plan_file"),
-            "pr": ("base", "ask_file", "plan_file")}
+REQUIRED = {
+    "commit": ("commit", "ask_file", "plan_file"),
+    "answers-ask": ("base", "ask_file", "plan_file"),
+    "pr": ("base", "ask_file", "plan_file"),
+}
 
 
 def missing_args(pass_name: str, given: dict[str, str | None]) -> list[str]:
@@ -131,9 +135,20 @@ def run_codex(prompt: str, model: str) -> tuple[int, str]:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "last_message.md"
         result = subprocess.run(
-            [find_tool("codex"), "exec", "--model", model, "--sandbox", "read-only",
-             "--output-last-message", str(out), "-"],
-            input=prompt, text=True, capture_output=True,
+            [
+                find_tool("codex"),
+                "exec",
+                "--model",
+                model,
+                "--sandbox",
+                "read-only",
+                "--output-last-message",
+                str(out),
+                "-",
+            ],
+            input=prompt,
+            text=True,
+            capture_output=True,
         )
         message = out.read_text() if out.exists() else result.stderr
         return result.returncode, message
@@ -187,7 +202,11 @@ def main() -> int:
         changes = collect_changes(args.base)
     principles = project_rules(Path.cwd()) if args.pass_name == "principles" else ""
     prompt = build_prompt(
-        args.pass_name, read_optional(args.ask_file), read_optional(args.plan_file), principles, changes,
+        args.pass_name,
+        read_optional(args.ask_file),
+        read_optional(args.plan_file),
+        principles,
+        changes,
         context_files(args.context_file),
     )
     model = resolve_model(args.pass_name, args.model)
