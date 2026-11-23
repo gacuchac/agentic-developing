@@ -4,7 +4,7 @@ description: Light, interview-mode planning in three steps (scope and options, t
 argument-hint: <project>/<task-id> <description of the product or feature>
 ---
 
-Task-id and request: if I gave a task-id, use it; otherwise make a short one from my request and tell me what it is. Planning folder: .claude/runs/<task-id>/planner/
+Task-id and request: if I gave a task-id, use it; otherwise make a short one from my request and tell me what it is. Planning folder: .claude/runs/<project>/<task-id>/planner/
 
 This is the short version of /planner for time-boxed demos. Say once, in a line, that the full six-step /planner is the normal process. Be brief: no more than 5 lines on what to look at after each step.
 

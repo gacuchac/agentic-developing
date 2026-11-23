@@ -185,7 +185,7 @@ A case passes only when every code check passes and every dimension meets the ca
 A light pass for time-boxed demos (about 90 minutes). It keeps the checkpoints that show judgment and drops the heavy machinery. Everything else in this document still applies, including the architecture stop rule and the branch flow. State at the start that this is the short route and that the full process is the one above.
 
 Route, one task at a time, in the main session:
-1. Check the main checkout is on dev, clean and up to date (section 4b). Create `feature/<task-id>` (or `bugfix/<task-id>`) off dev. Write `ask.md` to `.claude/runs/<task-id>/`.
+1. Check the project's main checkout is on dev, clean and up to date (section 4b). Create `feature/<task-id>` (or `bugfix/<task-id>`) off dev. Write `ask.md` to `.claude/runs/<project>/<task-id>/`.
 2. Call one `decomposer` to write `plan.md`. No cross-check and no plan review. If its Contracts section lists any changed function, or it reports `ARCHITECTURE CHANGE`, apply the architecture stop rule.
 3. **Checkpoint:** show me `plan.md` and wait until I approve it. Tell me in a few lines what to check.
 4. `qa` writes and commits tests (commit cadence, section 4). **Checkpoint:** confirm they fail because the feature is missing, and say so.
