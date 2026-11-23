@@ -21,8 +21,8 @@ def check(schema: object, value: object, path: str = "") -> list[str]:
     if isinstance(schema, list):
         return [e for i, v in enumerate(value) for e in check(schema[0], v, f"{path}[{i}]")]
     join = lambda k: f"{path}.{k}" if path else str(k)
-    if isinstance(next(iter(schema)), type):  # {K: T}: check every key and value
-        (key_type, item), = schema.items()
+    if len(schema) == 1 and isinstance(next(iter(schema)), type):  # {K: T}: check every key and value
+        ((key_type, item),) = schema.items()
         bad_keys = [f"{join(k)}: key expected {key_type.__name__}" for k in value if not isinstance(k, key_type)]
         return bad_keys + [e for k, v in value.items() if isinstance(k, key_type) for e in check(item, v, join(k))]
     errors = [f"{join(k)}: missing" for k in schema if k not in value]

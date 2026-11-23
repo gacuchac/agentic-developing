@@ -235,3 +235,25 @@ def test_us10_does_not_mutate_schema():
     before = copy.deepcopy(sch)
     errs(sch, {"a": ["x"], "b": {"k": "v"}})
     assert sch == before
+
+
+def test_us10_empty_schema_matches_empty_dict():
+    assert errs({}, {}) == []
+
+
+def test_us10_empty_schema_allows_extra_keys():
+    assert errs({}, {"x": 1}) == []
+
+
+def test_us10_empty_schema_nested_matches():
+    assert errs({"a": {}}, {"a": {}}) == []
+
+
+def test_us10_empty_schema_non_dict_one_error_naming_result():
+    out = errs({}, 5)
+    assert len(out) == 1 and "result" in out[0]
+
+
+def test_us10_empty_schema_nested_non_dict_one_error_naming_path():
+    out = errs({"a": {}}, {"a": 5})
+    assert len(out) == 1 and "a" in out[0]
