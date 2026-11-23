@@ -35,11 +35,20 @@ def run_folder(common_dir: Path, task: str, workspace: Path) -> Path | None:
 
 
 def reviewed(folder: Path, sha: str) -> bool:
-    """Return True when any folder/review-commit-*.md names `sha` as its base.
+    """Return True when any folder/review-commit-*.md names `sha` as its base and records `exit: 0`.
 
-    Any verdict counts; a missing folder gives False.
+    Any verdict counts, a failed Codex run (other exit code) does not; a missing folder gives False.
     """
-    return any(f"base: commit {sha} " in f.read_text() for f in folder.glob("review-commit-*.md"))
+    needles = (f"base: commit {sha} ", "exit: 0 ")
+    return any(all(n in f.read_text() for n in needles) for f in folder.glob("review-commit-*.md"))
+
+
+def nothing_to_review(repo: Path) -> bool:
+    """Return True when every change in HEAD is a deletion or under .claude/skills/."""
+    lines = subprocess.run(
+        ["git", "show", "--name-status", "--format=", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    return all(ln.startswith("D") or ln.split("\t")[-1].startswith(".claude/skills/") for ln in lines)
 
 
 def needs_review(repo: Path) -> bool:
@@ -65,7 +74,7 @@ def main(workspace: Path = WORKSPACE) -> int:
     """Return 1 and print a blocking message when HEAD of the current task branch has no saved review, else 0."""
     branch = _git("rev-parse", "--abbrev-ref", "HEAD")
     task = task_id(branch)
-    if task is None or not needs_review(Path.cwd()):
+    if task is None or not needs_review(Path.cwd()) or nothing_to_review(Path.cwd()):
         return 0
     folder = run_folder(Path(_git("rev-parse", "--path-format=absolute", "--git-common-dir")), task, workspace)
     short = _git("rev-parse", "--short", "HEAD")

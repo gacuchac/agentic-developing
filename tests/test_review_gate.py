@@ -218,3 +218,106 @@ def test_us6_gate_passes_when_head_is_merge_commit(ws_project):
 def test_us6_gate_passes_when_repo_is_outside_workspace(ws_project, tmp_path):
     _commit("own")
     assert gate.main(tmp_path / "other-workspace") == 0
+
+
+def _header_exit(sha, code):
+    return f"<!-- pass: commit | model: m | base: commit {sha} | exit: {code} | 2026-01-01 00:00:00 -->\nVERDICT: PASS\n"
+
+
+def _save_review_exit(ws, short, code, task="x"):
+    folder = ws / ".claude" / "runs" / "proj" / task
+    folder.mkdir(parents=True)
+    (folder / "review-commit-1.md").write_text(_header_exit(short, code))
+
+
+def test_x12_reviewed_false_when_codex_exit_nonzero(tmp_path):
+    (tmp_path / "review-commit-1.md").write_text(_header_exit(SHA, 1))
+    assert gate.reviewed(tmp_path, SHA) is False
+
+
+def test_x12_reviewed_false_when_exit_is_ten_not_zero(tmp_path):
+    (tmp_path / "review-commit-1.md").write_text(_header_exit(SHA, 10))
+    assert gate.reviewed(tmp_path, SHA) is False
+
+
+def test_x12_reviewed_true_when_exit_zero_even_if_verdict_changes(tmp_path):
+    (tmp_path / "review-commit-1.md").write_text(_header_exit(SHA, 0).replace("PASS", "CHANGES"))
+    assert gate.reviewed(tmp_path, SHA) is True
+
+
+def test_x12_reviewed_true_when_one_of_two_reviews_succeeded(tmp_path):
+    (tmp_path / "review-commit-1.md").write_text(_header_exit(SHA, 1))
+    (tmp_path / "review-commit-2.md").write_text(_header_exit(SHA, 0))
+    assert gate.reviewed(tmp_path, SHA) is True
+
+
+def test_x12_gate_blocks_head_whose_review_failed(ws_project):
+    _commit("own")
+    _save_review_exit(ws_project, _short(), 1)
+    assert gate.main(ws_project) == 1
+
+
+def test_x12_gate_passes_head_whose_review_succeeded(ws_project):
+    _commit("own")
+    _save_review_exit(ws_project, _short(), 0)
+    assert gate.main(ws_project) == 0
+
+
+def _commit_deleting(name):
+    _git("rm", name)
+    _git("commit", "-m", f"delete {name}")
+
+
+def _commit_skill(path):
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(path)
+    _git("add", path)
+    _git("commit", "-m", path)
+
+
+def test_x12_gate_passes_deletion_only_head_without_review(ws_project):
+    _commit("own")
+    _commit_deleting("own")
+    assert gate.main(ws_project) == 0
+
+
+def test_x12_gate_passes_skills_only_head_without_review(ws_project):
+    _commit("own")
+    _commit_skill(".claude/skills/s/SKILL.md")
+    assert gate.main(ws_project) == 0
+
+
+def test_x12_gate_blocks_head_mixing_deletion_and_edit(ws_project):
+    _commit("own")
+    Path("extra").write_text("x")
+    _git("add", "extra")
+    _git("rm", "own")
+    _git("commit", "-m", "mixed")
+    assert gate.main(ws_project) == 1
+
+
+def test_x12_gate_blocks_head_mixing_skills_and_other_file(ws_project):
+    _commit("own")
+    Path("other").write_text("x")
+    Path(".claude/skills/s").mkdir(parents=True)
+    Path(".claude/skills/s/SKILL.md").write_text("x")
+    _git("add", "other", ".claude/skills/s/SKILL.md")
+    _git("commit", "-m", "mixed")
+    assert gate.main(ws_project) == 1
+
+
+def test_x12_nothing_to_review_true_for_deletion_only(ws_project):
+    _commit("own")
+    _commit_deleting("own")
+    assert gate.nothing_to_review(Path.cwd()) is True
+
+
+def test_x12_nothing_to_review_true_for_skills_only(ws_project):
+    _commit_skill(".claude/skills/a/b.md")
+    assert gate.nothing_to_review(Path.cwd()) is True
+
+
+def test_x12_nothing_to_review_false_for_ordinary_commit(ws_project):
+    _commit("own")
+    assert gate.nothing_to_review(Path.cwd()) is False
