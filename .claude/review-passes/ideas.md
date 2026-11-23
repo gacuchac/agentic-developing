@@ -1,0 +1,1 @@
+Propose up to five bold, unconventional approaches to the ask. Don't play it safe. For each: the idea in two sentences, why it could be much better than the obvious approach, and the main risk. No verdict line.

@@ -1,0 +1,17 @@
+# Each project folder is its own git repo: ignore every top-level folder except the workflow's own.
+/*/
+!/.claude/
+!/.githooks/
+!/.github/
+!/docs/
+!/scripts/
+!/templates/
+!/tests/
+
+# Working files
+.claude/runs/
+.worktrees/
+.venv/
+__pycache__/
+.pytest_cache/
+.env
