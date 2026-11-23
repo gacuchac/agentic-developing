@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -120,12 +121,17 @@ def resolve_model(pass_name: str, override: str | None) -> str:
     return model
 
 
+def find_tool(name: str) -> str:
+    """Path to a CLI tool on PATH or in the usual Homebrew folders, which VS Code's PATH often lacks; else name."""
+    return shutil.which(name, path=f"{os.environ.get('PATH', '')}:/opt/homebrew/bin:/usr/local/bin") or name
+
+
 def run_codex(prompt: str, model: str) -> tuple[int, str]:
     """Run codex exec read-only with the prompt on stdin; return exit code and final message."""
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "last_message.md"
         result = subprocess.run(
-            ["codex", "exec", "--model", model, "--sandbox", "read-only",
+            [find_tool("codex"), "exec", "--model", model, "--sandbox", "read-only",
              "--output-last-message", str(out), "-"],
             input=prompt, text=True, capture_output=True,
         )
