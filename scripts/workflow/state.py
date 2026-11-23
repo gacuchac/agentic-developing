@@ -28,3 +28,17 @@ def save(run: Path, state: dict) -> None:
     with tempfile.NamedTemporaryFile("w", dir=run, delete=False) as f:
         json.dump(state, f, indent=2)
     os.replace(f.name, Path(run) / "state.json")
+
+
+def with_entry(state: dict, entry: dict, now: str) -> dict:
+    """Return a copy of state with entry, stamped with time `now` and the current unit label, appended to history.
+
+    The input state and its history list are not mutated.
+    """
+    stamped = {**entry, "t": now, "unit": unit_label(state)}
+    return {**state, "history": [*state["history"], stamped]}
+
+
+def unit_history(state: dict) -> list[dict]:
+    """Return the history entries whose unit equals the state's current unit label."""
+    return [e for e in state["history"] if e.get("unit") == unit_label(state)]

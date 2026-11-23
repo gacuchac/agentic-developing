@@ -62,3 +62,49 @@ def test_us6_unit_label_without_fix():
 
 def test_us6_unit_label_with_fix():
     assert state.unit_label({"unit": 3, "fix": 1}) == "3-fix1"
+
+
+def test_us6_with_entry_does_not_mutate_the_input():
+    s = state.new_state("t", "b", "l")
+    state.with_entry(s, {"kind": "x"}, "now")
+    assert s["history"] == []
+
+
+def test_us6_with_entry_tags_the_entry_with_time_and_unit():
+    s = state.new_state("t", "b", "l")
+    s["unit"], s["fix"] = 3, 1
+    out = state.with_entry(s, {"kind": "x"}, "2026-01-01T00:00:00")
+    assert out["history"] == [{"kind": "x", "t": "2026-01-01T00:00:00", "unit": "3-fix1"}]
+
+
+def test_us6_with_entry_keeps_earlier_entries():
+    s = state.with_entry(state.new_state("t", "b", "l"), {"kind": "a"}, "n1")
+    out = state.with_entry(s, {"kind": "b"}, "n2")
+    assert [e["kind"] for e in out["history"]] == ["a", "b"]
+
+
+def test_us6_unit_history_leaves_out_other_units():
+    s = state.new_state("t", "b", "l")
+    s["unit"] = 2
+    s = state.with_entry(s, {"kind": "old"}, "n")
+    s["unit"] = 3
+    s = state.with_entry(s, {"kind": "new"}, "n")
+    assert [e["kind"] for e in state.unit_history(s)] == ["new"]
+
+
+def test_us6_unit_history_separates_a_unit_from_its_fix():
+    s = state.new_state("t", "b", "l")
+    s["unit"] = 3
+    s = state.with_entry(s, {"kind": "base"}, "n")
+    s["fix"] = 1
+    s = state.with_entry(s, {"kind": "fix"}, "n")
+    assert [e["kind"] for e in state.unit_history(s)] == ["fix"]
+    s["fix"] = 0
+    assert [e["kind"] for e in state.unit_history(s)] == ["base"]
+
+
+def test_us6_unit_history_does_not_mutate_the_state():
+    s = state.with_entry(state.new_state("t", "b", "l"), {"kind": "a"}, "n")
+    before = json.dumps(s)
+    state.unit_history(s)
+    assert json.dumps(s) == before
