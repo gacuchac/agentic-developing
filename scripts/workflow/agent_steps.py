@@ -21,6 +21,8 @@ EXAMPLES: dict = {
     "subtract": {"removed": "unused helper", "files": {"src/x.py": 4}},
 }
 
+RESULT_KEYS: dict[str, str] = {"write": "qa", "fix": "qa_fix", "code": "implementer", "subtract": "subtract"}
+
 
 def validate_result(agent: str, data: object) -> list[str]:
     """Check an agent's result against SCHEMAS[agent]; return one error per bad field.
@@ -43,7 +45,7 @@ def render_prompt(agent: str, step: str, step_id: str, run: Path, repo: Path, un
     step, run folder, repo, unit text, a "do not commit" rule and a fenced
     workflow-result example block.
     """
-    example = json.dumps(EXAMPLES[agent], indent=2)
+    example = json.dumps(EXAMPLES[RESULT_KEYS[step]], indent=2)
     if template is not None:
         fields = {"step_id": step_id, "run": run, "repo": repo, "unit": unit, "schema": example}
         return template.format_map(fields)

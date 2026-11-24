@@ -145,14 +145,11 @@ def take(state: dict, option: str, evidence: dict, ctx: Ctx, handlers: dict = HA
     return advance(enter(out, entry["to"], reason), ctx, handlers), []
 
 
-_RESULT_KEYS = {"write": "qa", "fix": "qa_fix", "code": "implementer", "subtract": "subtract"}
-
-
 def _record_errors(state: dict, step_id: str, result: dict) -> list[str]:
     pending = state["pending"]
     if pending["kind"] != "agent" or pending["step_id"] != step_id:
         return [f"no agent step {step_id} is pending"]
-    return agent_steps.validate_result(_RESULT_KEYS[pending["step"]], result)
+    return agent_steps.validate_result(agent_steps.RESULT_KEYS[pending["step"]], result)
 
 
 def record(state: dict, step_id: str, result: dict, ctx: Ctx, handlers: dict = HANDLERS) -> tuple[dict, list[str]]:
