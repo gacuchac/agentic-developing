@@ -1,5 +1,7 @@
 """Plain-text views of a task's state and of its decision log."""
 
+from __future__ import annotations
+
 import importlib.util
 import sys
 import time
@@ -10,6 +12,8 @@ import agent_steps
 import decisions
 import engine
 import graph
+import state as st
+import units
 from autonodes import Ctx
 from effects import checks, gitops, reviews
 
@@ -131,3 +135,23 @@ def default_ctx(run: Path) -> Ctx:
         log=_logger(run),
         now=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"),
     )
+
+
+def start_state(run: Path, plan: str, ctx: Ctx) -> tuple[dict | None, list[str]]:
+    """Create the state of a task and advance it to its first agent step.
+
+    Returns (state, []) on success. Returns (None, errors) when run/state.json exists, run/<plan> is
+    missing or has no units, or the branch and launch commit cannot be found.
+    """
+    if (run / "state.json").exists():
+        return None, [f"{run / 'state.json'} already exists"]
+    if not (run / plan).is_file():
+        return None, [f"{run / plan} is missing"]
+    if not units.plan_units((run / plan).read_text()):
+        return None, [f"{plan} has no units"]
+    try:
+        branch, launch = gitops.launch_info(ctx.repo)
+    except RuntimeError as e:
+        return None, [str(e).strip()]
+    state = st.new_state(f"{run.parent.name}/{run.name}", branch, launch, plan)
+    return engine.advance(state, ctx), []
