@@ -116,6 +116,7 @@ def test_us10_commit_fix_commits_everything_and_writes_evidence(tmp_path):
 def test_us10_commit_subtract_message_uses_stories_and_summary(tmp_path):
     ctx, state, calls = _make(tmp_path)
     state["history"].append({"node": "subtract", "result": {"removed": "dead helper", "files": {"a.py": 3}}})
+    state["history"].append({"node": "subtract_check", "outcome": "pass", "result": {"touched": [], "failed": []}})
     outcome, entry, new = autonodes.HANDLERS["commit_subtract"](state, ctx)
     assert outcome == "done"
     _, message, paths = calls["commit"][0]
@@ -125,6 +126,20 @@ def test_us10_commit_subtract_message_uses_stories_and_summary(tmp_path):
     assert (tmp_path / f"evidence-{SHA}.json").exists()
     assert new["head"] == SHA
     assert calls["log"] == [(tmp_path, ["2026-01-01T00:00:00", f"u{st.unit_label(state)} commit_subtract", "commit", "US-9: Subtract: dead helper", SHA, ""])]
+
+
+def test_us33_commit_subtract_writes_a_subtract_record_without_running_evidence(tmp_path):
+    ctx, state, calls = _make(tmp_path)
+    state["history"].append({"node": "subtract", "result": {"removed": "dead helper", "files": {}}})
+    state["history"].append({"node": "subtract_check", "outcome": "pass", "result": {"touched": [], "failed": []}})
+    outcome, entry, _ = autonodes.HANDLERS["commit_subtract"](state, ctx)
+    assert outcome == "done"
+    ev_path = tmp_path / f"evidence-{SHA}.json"
+    record = json.loads(ev_path.read_text())
+    assert record["kind"] == "subtract"
+    assert record["sha"] == SHA
+    assert calls["evidence"] == []
+    assert Path(entry["evidence"]) == ev_path
 
 
 @pytest.mark.parametrize("node", ["commit_tests", "commit_fix", "commit_subtract"])
@@ -225,6 +240,7 @@ def test_us18_commit_subtract_passes_no_tests_commit(tmp_path):
     ctx, state, calls = _make(tmp_path)
     state = _with_tests_commit(state, "t111111")
     state["history"].append({"node": "subtract", "result": {"removed": "x", "files": {}}})
+    state["history"].append({"node": "subtract_check", "outcome": "pass", "result": {"touched": [], "failed": []}})
     autonodes.HANDLERS["commit_subtract"](state, ctx)
     assert calls["evidence"] == [(ctx.repo, tmp_path, SHA, ctx.python, None)]
 
