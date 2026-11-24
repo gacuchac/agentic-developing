@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tokenize
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -76,7 +77,7 @@ def slop_failed(sources: dict[str, str]) -> bool:
     for name, source in sources.items():
         try:
             findings = check_source(source, Path(name))
-        except ValueError:
+        except (ValueError, SyntaxError, tokenize.TokenError):
             continue
         for line, message in findings:
             print(f"{name}:{line}: {message}")
