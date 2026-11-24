@@ -71,6 +71,11 @@ def _result(state: dict, node: str) -> dict:
     return [e for e in state["history"] if e.get("node") == node and "result" in e][-1]["result"]
 
 
+def _is_red(test: str, failed: list[str]) -> bool:
+    """True when `test` (an id or a file) failed itself, through its file, or through a test inside it."""
+    return test in failed or test.split("::")[0] in failed or any(f.startswith(test + "::") for f in failed)
+
+
 def _red_run(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     """Run qa's added tests; `expected` when all fail and qa's reason is expected, else `unexpected`."""
     qa = _result(state, "qa_write")
@@ -78,7 +83,7 @@ def _red_run(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     failed = ctx.tests(ctx.repo, added)["failed"]
     red = {"tests": added, "failed": failed, "claimed": qa["red_run"]}
     (ctx.run / "red.json").write_text(json.dumps(red))
-    covered = bool(added) and all(t in failed or t.split("::")[0] in failed for t in added)
+    covered = bool(added) and all(_is_red(t, failed) for t in added)
     return ("expected" if covered and qa["red_run"]["reason_expected"] else "unexpected"), red, state
 
 
