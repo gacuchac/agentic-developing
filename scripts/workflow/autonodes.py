@@ -118,10 +118,32 @@ def _commit_tests(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     return outcome, entry, new
 
 
+def _commit_all(state: dict, ctx: Ctx, message: str) -> tuple[str, dict, dict]:
+    outcome, entry, new = _commit(state, ctx, message, None)
+    if outcome == "done":
+        path = ctx.run / f"evidence-{entry['sha']}.json"
+        path.write_text(json.dumps(ctx.evidence(ctx.repo, ctx.run, entry["sha"], ctx.python)))
+        entry = {**entry, "evidence": str(path)}
+    return outcome, entry, new
+
+
+def _commit_fix(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
+    """Commit everything with the unit's message and record its evidence; `refused` with the error if a hook fails."""
+    return _commit_all(state, ctx, units.commit_message((ctx.run / "unit.md").read_text()))
+
+
+def _commit_subtract(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
+    """Commit everything as `<stories>: Subtract: <summary>` and record evidence; `refused` if a hook fails."""
+    stories = units.commit_message((ctx.run / "unit.md").read_text()).split(": ", 1)[0]
+    return _commit_all(state, ctx, f"{stories}: Subtract: {_result(state, 'subtract')['removed']}")
+
+
 HANDLERS: dict[str, Handler] = {
     "write_unit": _write_unit,
     "next_unit": _next_unit,
     "red_run": _red_run,
     "verify": _verify,
     "commit_tests": _commit_tests,
+    "commit_fix": _commit_fix,
+    "commit_subtract": _commit_subtract,
 }
