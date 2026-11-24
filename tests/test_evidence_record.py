@@ -85,3 +85,123 @@ def test_us9_complete_false_when_field_missing():
 
 def test_us9_complete_true_when_no_code_changed_and_nothing_added():
     assert er.complete(_record(code_changed=False, added=[], red=[], green=[])) is True
+
+
+import json
+import subprocess
+import sys
+
+_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "hooks" / "evidence_record.py"
+_SRC = Path(__file__).resolve().parents[1]
+_TEST_B = (
+    "import sys\nfrom pathlib import Path\n"
+    "sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))\n"
+    "from a import f\n\n\ndef test_b():\n    assert f() == 2\n"
+)
+
+
+def _git(repo: Path, *args: str) -> str:
+    cmd = ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args]
+    return subprocess.run(cmd, cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def _commit(repo: Path, msg: str, files: dict[str, str]) -> str:
+    for name, text in files.items():
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(text)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", msg)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def _repo(tmp_path: Path, *, with_tests: bool = True):
+    repo, run = tmp_path / "repo", tmp_path / "run"
+    repo.mkdir()
+    run.mkdir()
+    _git(repo, "init", "-q")
+    (run / "architecture.md").write_text("Status: approved\n")
+    (run / "unit.md").write_text("# unit\n")
+    test_a = (
+        "import sys\nfrom pathlib import Path\n"
+        "sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))\n"
+        "from a import f\n\n\ndef test_a():\n    assert f() >= 1\n"
+    )
+    _commit(repo, "US-1: base", {"src/a.py": "def f():\n    return 1\n", "tests/test_a.py": test_a})
+    tests_sha = _commit(repo, "test(US-1): new test", {"tests/test_b.py": _TEST_B}) if with_tests else None
+    return repo, run, tests_sha
+
+
+def _measure(repo, run, sha):
+    return er.measure(repo, run, sha, Path(sys.executable))
+
+
+def test_us9_measure_complete_record_for_red_then_green_fix(tmp_path):
+    repo, run, tests_sha = _repo(tmp_path)
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f():\n    return 2\n"})
+    rec = _measure(repo, run, fix)
+    assert rec["tests_commit"] == tests_sha
+    assert rec["added"] == ["tests/test_b.py::test_b"]
+    assert rec["red"] == rec["added"]
+    assert rec["green"] == rec["added"]
+    assert rec["failed"] == []
+    assert rec["tests_touched"] == []
+    assert rec["uncovered"] == []
+    assert rec["code_changed"] is True
+    assert er.complete(rec) is True
+
+
+def test_us9_measure_fix_leaving_test_failing_is_incomplete(tmp_path):
+    repo, run, _ = _repo(tmp_path)
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f():\n    return 3\n"})
+    rec = _measure(repo, run, fix)
+    assert rec["green"] == []
+    assert er.complete(rec) is False
+
+
+def test_us9_measure_reports_tests_edited_after_test_commit(tmp_path):
+    repo, run, _ = _repo(tmp_path)
+    fix = _commit(
+        repo, "US-1: fix", {"src/a.py": "def f():\n    return 2\n", "tests/test_b.py": _TEST_B + "\n# edit\n"}
+    )
+    rec = _measure(repo, run, fix)
+    assert "tests/test_b.py" in rec["tests_touched"]
+    assert er.complete(rec) is False
+
+
+def test_us9_measure_code_without_test_commit_is_incomplete(tmp_path):
+    repo, run, _ = _repo(tmp_path, with_tests=False)
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f():\n    return 2\n"})
+    rec = _measure(repo, run, fix)
+    assert rec["tests_commit"] is None
+    assert rec["added"] == []
+    assert rec["code_changed"] is True
+    assert er.complete(rec) is False
+
+
+def test_us9_measure_reads_breaks_line_of_unit_md(tmp_path):
+    repo, run, _ = _repo(tmp_path)
+    (run / "unit.md").write_text("# unit\nBreaks: tests/test_a.py::test_a, tests/x.py\n")
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f():\n    return 2\n"})
+    assert _measure(repo, run, fix)["breaks"] == ["tests/test_a.py::test_a", "tests/x.py"]
+
+
+def _write(repo: Path, run: Path, sha: str):
+    cmd = [sys.executable, str(_SCRIPT), "write", "--run", str(run), "--sha", sha, "--python", sys.executable]
+    return subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
+
+
+def test_us9_cli_write_saves_record_and_exits_zero_when_complete(tmp_path):
+    repo, run, _ = _repo(tmp_path)
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f():\n    return 2\n"})
+    proc = _write(repo, run, fix)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    saved = json.loads((run / f"evidence-{fix}.json").read_text())
+    assert saved["added"] == ["tests/test_b.py::test_b"]
+
+
+def test_us9_cli_write_exits_one_and_names_failing_field(tmp_path):
+    repo, run, _ = _repo(tmp_path)
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f():\n    return 3\n"})
+    proc = _write(repo, run, fix)
+    assert proc.returncode == 1
+    assert "green" in proc.stdout + proc.stderr
