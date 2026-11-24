@@ -154,6 +154,12 @@ def test_us11_default_ctx_fields_are_callable_or_paths_and_repo_matches(tmp_path
     assert ctx.run == run
 
 
+def test_us38_default_ctx_subtract_record_is_the_hook_record(tmp_path):
+    _, run = _tree(tmp_path, "proj")
+    expected = {"kind": "subtract", "sha": "abc", "tests_touched": ["t.py"], "suite_failed": []}
+    assert wf.default_ctx(run).subtract_record("abc", ["t.py"], []) == expected
+
+
 def test_us11_default_ctx_collect_review_takes_only_the_handle(tmp_path):
     ws, run = _tree(tmp_path, "proj")
     log = tmp_path / "pass.log"
