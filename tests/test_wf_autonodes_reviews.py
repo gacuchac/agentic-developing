@@ -195,3 +195,29 @@ def test_us18_impl_review_drops_fail_quoting_only_the_head_commit(tmp_path):
     assert outcome == "PASS"
     assert entry["reviews"][0]["fails"] == []
     assert entry["reviews"][0]["dropped"] == ["C2"]
+
+
+def _answers_ask_ctx(tmp_path, quote, log, decisions=None):
+    import dataclasses
+
+    review_file = tmp_path / "repo" / ".claude" / "review-passes" / "answers-ask.md"
+    ctx, _, _ = make_ctx(tmp_path, [review_text(["A1"], fails={"A1": f"see `{quote}`"})])
+    review_file.write_text("- A1. Criterion A1.\n")
+    if decisions is not None:
+        (tmp_path / "decisions.tsv").write_text(decisions)
+    return dataclasses.replace(ctx, log_text=lambda repo_, base: log)
+
+
+def test_us32_answers_ask_keeps_fail_quoting_a_commit_subject(tmp_path):
+    ctx = _answers_ask_ctx(tmp_path, "US-1: add x", "commit abc\n\n    US-1: add x\n\n x.py | 1 +\n")
+    outcome, entry, _ = autonodes.HANDLERS["answers_ask"](make_state("answers_ask"), ctx)
+    assert outcome == "CHANGES"
+    assert entry["reviews"][0]["fails"] == ["A1"]
+    assert entry["reviews"][0]["dropped"] == []
+
+
+def test_us32_answers_ask_keeps_fail_quoting_a_decision_log_line(tmp_path):
+    ctx = _answers_ask_ctx(tmp_path, "chose option B for retries", "", "T\tD1\tchose option B for retries\n")
+    outcome, entry, _ = autonodes.HANDLERS["answers_ask"](make_state("answers_ask"), ctx)
+    assert outcome == "CHANGES"
+    assert entry["reviews"][0]["fails"] == ["A1"]
