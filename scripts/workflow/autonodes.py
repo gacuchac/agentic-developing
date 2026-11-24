@@ -6,6 +6,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import units
+
 
 @dataclass(frozen=True)
 class Ctx:
@@ -26,3 +28,28 @@ class Ctx:
     file_at: Callable[[Path, str, str | None], str | None]
     log: Callable[[Path, list[str]], None]
     now: Callable[[], str]
+
+
+Handler = Callable[[dict, Ctx], tuple[str, dict, dict]]
+
+
+def _fix(state: dict, ctx: Ctx) -> tuple[str, list[str]]:
+    decision = [e for e in state["history"] if "decision" in e][-1]["evidence"]
+    if "tests" in decision:
+        return "full-suite " + " ".join(decision["tests"]), decision["tests"]
+    ids = decision["findings"]
+    reviews = [r for e in state["history"] if "reviews" in e for r in e["reviews"]]
+    hit = [r for r in reviews if set(r["fails"]) & set(ids)]
+    text = "\n".join((ctx.run / r["review"]).read_text() for r in hit)
+    lines = [ln for ln in text.splitlines() if ln.split(":")[0] in ids]
+    return " ".join(sorted({r["pass"] for r in hit})) + " " + " ".join(ids), lines
+
+
+def _write_unit(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
+    """Write run/unit.md: the plan unit, or its fix text after a decision; outcome `done`."""
+    unit = units.plan_units((ctx.run / state["plan"]).read_text())[state["unit"] - 1]
+    if state["fix"]:
+        fix, lines = _fix(state, ctx)
+        unit = units.fix_text(unit, f"{fix} on {state['head']}", lines)
+    (ctx.run / "unit.md").write_text(unit)
+    return "done", {}, state
