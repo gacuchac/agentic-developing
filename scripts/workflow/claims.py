@@ -37,10 +37,20 @@ def _replace(active: Path, name: str, claim: dict) -> None:
     claimfiles.create(active, name, claim)
 
 
+def _remove_entries(agents: Path, key: str, value: str) -> None:
+    """Remove every registry entry in `agents` whose `key` equals `value`; a missing folder is fine."""
+    names = [p.name for p in agents.iterdir()] if agents.is_dir() else []
+    for name in names:
+        if (claimfiles.read(agents, name) or {}).get(key) == value:
+            claimfiles.remove(agents, name)
+
+
 def release(active: Path, name: str) -> dict | None:
     """Remove the claim `name` from `active`; return what it held, or None when there was no claim."""
     held = claimfiles.read(active, name)
     claimfiles.remove(active, name)
+    if held is not None:
+        _remove_entries(active / "agents", "run", held["run"])
     return held
 
 
@@ -49,6 +59,7 @@ def release_session(active: Path, session: str) -> list[str]:
     names = claimfiles.owned_by(active, session)
     for name in names:
         claimfiles.remove(active, name)
+    _remove_entries(active / "agents", "session", session)
     return names
 
 
