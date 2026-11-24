@@ -47,14 +47,12 @@ def test_us7_enter_user_from_impl_decide_lists_resume_nodes():
     assert p["kind"] == "user"
     assert p["from"] == "impl_decide"
     assert p["reason"] == "stuck"
-    assert {"implement", "commit_fix", "impl_decide"} <= set(p["resume"])
-    assert "user" not in p["resume"]
-    assert p["resume"] == sorted(set(p["resume"]))
+    assert p["resume"] == ["commit_fix", "impl_decide", "implement"]
 
 
 def test_us7_enter_user_from_commit_fix_can_resume_commit_fix():
     out = engine.enter(_state("commit_fix"), "user")
-    assert "commit_fix" in out["pending"]["resume"]
+    assert out["pending"]["resume"] == ["commit_fix", "implement", "next_unit"]
     assert out["pending"]["reason"] == ""
 
 
