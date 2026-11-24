@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 _FAILURE_LINE = re.compile(r"^(?:FAILED|ERROR) (.+?)(?: - .*)?$", re.M)
+_PASSED_COUNT = re.compile(r"(\d+) passed")
 
 
 def failed_ids(output: str) -> list[str]:
@@ -25,9 +26,10 @@ def all_red(tests: list[str], failed: list[str]) -> bool:
 
 
 def run_pytest(repo: Path, targets: list[str], python: Path | None = None) -> dict:
-    """Run pytest on targets in repo; return {"code": exit code, "failed": failing ids}.
+    """Run pytest on targets in repo; return {"code": exit code, "failed": failing ids, "passed": passed count}.
 
     A non-zero exit that names no failing test gives one entry, `pytest exit <code>: <last output line>`.
+    `passed` is the N of the last `N passed` in the summary, 0 when there is none.
     """
     venv_python = repo / ".venv" / "bin" / "python"
     interpreter = python or (venv_python if venv_python.exists() else Path(sys.executable))
@@ -39,7 +41,8 @@ def run_pytest(repo: Path, targets: list[str], python: Path | None = None) -> di
     if proc.returncode and not failed:
         lines = [line for line in (proc.stdout + proc.stderr).splitlines() if line.strip()]
         failed = [f"pytest exit {proc.returncode}: {lines[-1] if lines else ''}"]
-    return {"code": proc.returncode, "failed": failed}
+    counts = _PASSED_COUNT.findall(proc.stdout)
+    return {"code": proc.returncode, "failed": failed, "passed": int(counts[-1]) if counts else 0}
 
 
 def tests_touched(repo: Path) -> list[str]:

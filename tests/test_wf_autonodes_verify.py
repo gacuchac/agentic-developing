@@ -18,7 +18,7 @@ def make_ctx(tmp_path, tests=None, touched=None, diff=None, size=None, added=Non
 
     def run_tests(repo, ids):
         calls.append(list(ids))
-        return (tests or (lambda ids: {"code": 0, "failed": []}))(ids)
+        return {"passed": 0, **(tests or (lambda ids: {"code": 0, "failed": []}))(ids)}
 
     def unused(*a, **k):
         raise AssertionError("unexpected call")
@@ -252,7 +252,7 @@ def test_us24_verify_fast_unit_with_file_outside_its_files_gives_full_with_reaso
     ctx, _ = make_ctx(tmp_path, size=lambda repo: {"scripts/a.py": 5, "scripts/other.py": 3})
     outcome, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
     assert outcome == "full"
-    assert entry == {"failed": [], "disputed": [], "touched": [], "reasons": ["outside: scripts/other.py"]}
+    assert entry == {"failed": [], "passed": 0, "disputed": [], "touched": [], "reasons": ["outside: scripts/other.py"]}
 
 
 def test_us24_verify_fast_unit_over_its_limit_gives_full_with_reason(tmp_path):
@@ -269,7 +269,7 @@ def test_us24_verify_fast_unit_inside_files_and_limit_gives_fast_with_no_reasons
     ctx, _ = make_ctx(tmp_path, size=lambda repo: sizes.append(repo) or {"scripts/a.py": 12})
     outcome, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
     assert outcome == "fast"
-    assert entry == {"failed": [], "disputed": [], "touched": [], "reasons": []}
+    assert entry == {"failed": [], "passed": 0, "disputed": [], "touched": [], "reasons": []}
     assert sizes == [tmp_path / "repo"]
 
 
@@ -282,7 +282,7 @@ def test_us24_verify_full_unit_has_no_reasons_and_does_not_measure(tmp_path):
     ctx, _ = make_ctx(tmp_path, size=boom)
     outcome, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
     assert outcome == "full"
-    assert entry == {"failed": [], "disputed": [], "touched": [], "reasons": []}
+    assert entry == {"failed": [], "passed": 0, "disputed": [], "touched": [], "reasons": []}
 
 
 def test_us24_verify_failing_suite_gives_fail_with_no_reasons(tmp_path):
@@ -312,3 +312,40 @@ def test_us18_red_run_counts_a_parametrized_test_by_its_failing_cases(tmp_path):
     outcome, entry, _ = autonodes.HANDLERS["red_run"](make_state(added=added), ctx)
     assert outcome == "expected"
     assert entry == {"tests": added, "failed": cases, "claimed": {"failed": added, "reason_expected": True}, "not_red": [], "left_out": []}
+
+
+def test_us36_verify_green_entry_records_how_many_tests_passed(tmp_path):
+    unit_md(tmp_path, "Lane: fast\n")
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 0, "failed": [], "passed": 7})
+    _, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
+    assert entry["passed"] == 7
+
+
+def test_us36_verify_with_tests_touched_records_zero_passed_and_runs_nothing(tmp_path):
+    unit_md(tmp_path, "Lane: fast\n")
+    ctx, calls = make_ctx(tmp_path, touched=lambda repo: ["tests/test_a.py"])
+    outcome, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
+    assert outcome == "tests_touched"
+    assert entry["passed"] == 0
+    assert calls == []
+
+
+def test_us36_full_suite_entry_records_how_many_tests_passed(tmp_path):
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 0, "failed": [], "passed": 5})
+    _, entry, _ = autonodes.HANDLERS["full_suite"](make_state(), ctx)
+    assert entry["passed"] == 5
+
+
+def test_us36_subtract_check_pass_entry_records_how_many_tests_passed(tmp_path):
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 0, "failed": [], "passed": 4}, diff="-dead\n")
+    outcome, entry, _ = autonodes.HANDLERS["subtract_check"](make_state(), ctx)
+    assert outcome == "pass"
+    assert entry["passed"] == 4
+
+
+def test_us36_subtract_check_with_tests_touched_records_zero_passed(tmp_path):
+    ctx, calls = make_ctx(tmp_path, diff="--- a/tests/t.py\n", touched=lambda repo: ["tests/t.py"])
+    outcome, entry, _ = autonodes.HANDLERS["subtract_check"](make_state(), ctx)
+    assert outcome == "fail"
+    assert entry["passed"] == 0
+    assert calls == []

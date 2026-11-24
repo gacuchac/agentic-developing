@@ -50,13 +50,13 @@ def _repo(tmp_path, with_fail):
 def test_us10_run_pytest_reports_code_and_failing_id(tmp_path):
     repo = _repo(tmp_path, True)
     res = checks.run_pytest(repo, ["test_ok.py", "test_bad.py"], python=Path(sys.executable))
-    assert res == {"code": 1, "failed": ["test_bad.py::test_bad"]}
+    assert res == {"code": 1, "failed": ["test_bad.py::test_bad"], "passed": 1}
 
 
 def test_us10_run_pytest_all_passing(tmp_path):
     repo = _repo(tmp_path, False)
     res = checks.run_pytest(repo, ["test_ok.py"], python=Path(sys.executable))
-    assert res == {"code": 0, "failed": []}
+    assert res == {"code": 0, "failed": [], "passed": 1}
 
 
 def test_us10_run_pytest_uses_given_interpreter_outside_repo_venv(tmp_path):
@@ -222,6 +222,18 @@ def test_us18_run_pytest_crashed_run_is_a_failure_not_green(tmp_path):
     repo.mkdir()
     (repo / "test_ok.py").write_text("def test_ok():\n    assert True\n")
     assert checks.run_pytest(repo, ["."], fake) == {
-        "code": 1, "failed": ["pytest exit 1: No module named pytest"],
+        "code": 1, "failed": ["pytest exit 1: No module named pytest"], "passed": 0,
     }
-    assert checks.run_pytest(repo, ["."], Path(sys.executable)) == {"code": 0, "failed": []}
+    assert checks.run_pytest(repo, ["."], Path(sys.executable)) == {"code": 0, "failed": [], "passed": 1}
+
+
+def test_us36_run_pytest_counts_passed_tests_in_a_mixed_run(tmp_path):
+    (tmp_path / "test_mix.py").write_text(
+        "def test_a():\n    assert True\n\n"
+        "def test_b():\n    assert True\n\n"
+        "def test_c():\n    assert False\n"
+    )
+    res = checks.run_pytest(tmp_path, ["test_mix.py"], python=Path(sys.executable))
+    assert res["passed"] == 2
+    assert res["code"] == 1
+    assert res["failed"] == ["test_mix.py::test_c"]
