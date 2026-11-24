@@ -59,6 +59,15 @@ def test_us9_commit_raises_runtime_error_when_hook_fails(repo: Path) -> None:
         gitops.commit(repo, "x", None)
 
 
+def test_us9_commit_with_empty_paths_commits_nothing(repo: Path) -> None:
+    _write(repo, "src/a.py", "a = 2\n")
+    head = _git(repo, "rev-parse", "HEAD")
+    with pytest.raises(RuntimeError):
+        gitops.commit(repo, "msg", [])
+    assert _git(repo, "rev-parse", "HEAD") == head
+    assert "src/a.py" in _git(repo, "status", "--porcelain")
+
+
 def test_us9_file_at_reads_old_version_at_sha(repo: Path) -> None:
     old = _git(repo, "rev-parse", "HEAD").strip()
     _write(repo, "src/a.py", "a = 2\n")
