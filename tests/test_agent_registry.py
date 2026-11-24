@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -51,3 +52,33 @@ def test_us20_prompt_without_run_folder_gives_none(reg):
 
 def test_us20_other_tool_gives_none(reg):
     assert reg.entry_from(_event(tool_name="Bash")) is None
+
+
+def _stdin(event):
+    return json.dumps(event)
+
+
+def test_us20_main_writes_entry_file_with_four_fields(reg, tmp_path):
+    assert reg.main(_stdin(_event()), tmp_path) == 0
+    written = json.loads((tmp_path / "agents" / "abc123.json").read_text())
+    assert written == {"session": "sess-1", "run": "/runs/P/task", "step_id": "u5-write-1", "agent": "qa"}
+
+
+def test_us20_main_garbage_stdin_writes_nothing(reg, tmp_path):
+    assert reg.main("not json {", tmp_path) == 0
+    assert not list(tmp_path.rglob("*.json"))
+
+
+def test_us20_main_event_without_wf_step_writes_nothing(reg, tmp_path):
+    event = _event(tool_input={"prompt": "Run folder: /runs/P/task", "subagent_type": "qa"})
+    assert reg.main(_stdin(event), tmp_path) == 0
+    assert not list(tmp_path.rglob("*.json"))
+
+
+def test_us20_main_second_launch_keeps_first_entry(reg, tmp_path):
+    reg.main(_stdin(_event()), tmp_path)
+    other = "wf-step: u9-write-2\nRun folder: /runs/Q/other\n"
+    assert reg.main(_stdin(_event(tool_input={"prompt": other, "subagent_type": "dev"})), tmp_path) == 0
+    written = json.loads((tmp_path / "agents" / "abc123.json").read_text())
+    assert written["step_id"] == "u5-write-1"
+    assert written["agent"] == "qa"
