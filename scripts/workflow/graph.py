@@ -17,7 +17,12 @@ _RAW: dict[str, dict[str, str]] = {
     "impl_review": {"PASS": "commit_fix", "CHANGES": "impl_decide", "MALFORMED": "user"},
     "impl_decide": {"correct": "implement", "overstated": "commit_fix", "wrong": "commit_fix"},
     "commit_fix": {"done": "next_unit", "refused": "implement"},
-    "next_unit": {"more": "write_unit", "last": "done", "finished": "done"},
+    "next_unit": {"more": "write_unit", "last": "subtract", "finished": "full_suite"},
+    "subtract": {"recorded": "subtract_check"},
+    "subtract_check": {"pass": "commit_subtract", "nothing": "branch_reviews", "fail": "subtract"},
+    "commit_subtract": {"done": "branch_reviews", "refused": "subtract"},
+    "branch_reviews": {"PASS": "full_suite", "CHANGES": "branch_decide", "MALFORMED": "user"},
+    "branch_decide": {"correct": "write_unit", "overstated": "full_suite", "wrong": "full_suite"},
     "full_suite": {"pass": "answers_ask", "fail": "full_decide"},
     "full_decide": {"code_wrong": "write_unit"},
     "answers_ask": {"PASS": "done", "CHANGES": "aa_decide", "MALFORMED": "user"},
@@ -28,20 +33,28 @@ _RAW: dict[str, dict[str, str]] = {
 
 EDGES: dict[str, dict[str, str]] = {n: {**e, **STOPS} if n.endswith("_decide") else e for n, e in _RAW.items()}
 
-AGENT_STEPS = {"qa_write": ("qa", "write"), "qa_fix": ("qa", "fix"), "implement": ("implementer", "code")}
+AGENT_STEPS = {
+    "qa_write": ("qa", "write"),
+    "qa_fix": ("qa", "fix"),
+    "implement": ("implementer", "code"),
+    "subtract": ("implementer", "subtract"),
+}
 REVIEW_PASSES = {
     "tests_review": ("tests",),
     "impl_review": ("impl",),
+    "branch_reviews": ("principles", "alternatives"),
     "answers_ask": ("answers-ask",),
 }
 DECIDES_ON = {
     "tests_decide": "tests_review",
     "impl_decide": "impl_review",
+    "branch_decide": "branch_reviews",
     "aa_decide": "answers_ask",
 }
 _BACK = [("tests_decide", "correct"), ("red_decide", "tests_wrong"), ("impl_decide", "correct")]
 _BACK += [("fail_decide", "code_wrong"), ("fail_decide", "tests_wrong"), ("verify", "tests_touched")]
 _BACK += [("commit_tests", "refused"), ("commit_fix", "refused")]
+_BACK += [("subtract_check", "fail"), ("commit_subtract", "refused")]
 BACK_EDGES: dict[tuple[str, str], str] = {(n, o): EDGES[n][o] for n, o in _BACK}
 ROUND_CAP = 3
 WRONG_CAP = 2
