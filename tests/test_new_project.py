@@ -39,3 +39,17 @@ def test_us27_write_files_makes_shebang_files_executable(tmp_path):
     np.write_files(tmp_path, {"a.py": "#!/usr/bin/env python3\n", "b.txt": "x\n"})
     assert (tmp_path / "a.py").stat().st_mode & 0o100
     assert not (tmp_path / "b.txt").stat().st_mode & 0o100
+
+
+def test_new_repo_commits_as_the_bot_noreply_identity(tmp_path):
+    np.write_files(tmp_path, np.project_files("demo", "A demo project."))
+    np.init_repo(tmp_path)
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(tmp_path), *args], capture_output=True, text=True, check=True).stdout
+
+    assert git("config", "--local", "user.name").strip() == "gacuchacbot"
+    assert git("config", "--local", "user.email").strip() == "360311223+gacuchacbot@users.noreply.github.com"
+    assert git("log", "-1", "--format=%an <%ae>").strip() == (
+        "gacuchacbot <360311223+gacuchacbot@users.noreply.github.com>"
+    )
