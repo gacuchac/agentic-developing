@@ -35,7 +35,7 @@ def review_text(ids, fails=None, verdict="PASS", drop=None):
     return "\n".join(lines) + f"\nVERDICT {verdict}\n"
 
 
-def make_ctx(tmp_path, texts, collect=None):
+def make_ctx(tmp_path, texts, collect=None, source=SOURCE, diff=SOURCE):
     """texts: list of review texts handed out in order by run_review (None = nothing saved)."""
     repo = tmp_path / "repo"
     write_rubrics(repo)
@@ -72,10 +72,10 @@ def make_ctx(tmp_path, texts, collect=None):
         run_review=run_review,
         tests=unused,
         touched=unused,
-        source=lambda repo_, commit, base: SOURCE,
+        source=lambda repo_, commit, base: source,
         commit=unused,
         evidence=unused,
-        diff=unused,
+        diff=lambda repo_: diff,
         file_at=unused,
         log=lambda *a, **k: None,
         now=lambda: "T",
@@ -161,3 +161,37 @@ def test_us18_decided_tests_review_is_not_asked_again(tmp_path):
     assert entry == {"verdict": "PASS", "reviews": [], "decided": True}
     assert collected == []
     assert runs == []
+
+
+def test_us18_impl_review_args_have_neither_commit_nor_base(tmp_path):
+    ctx, runs, _ = make_ctx(tmp_path, [review_text(RUBRICS["impl"])])
+    autonodes.HANDLERS["impl_review"](make_state("impl_review"), ctx)
+    assert len(runs) == 1
+    assert "--commit" not in runs[0]
+    assert "--base" not in runs[0]
+
+
+def test_us18_impl_review_keeps_fail_quoting_uncommitted_change(tmp_path):
+    ctx, _, _ = make_ctx(
+        tmp_path,
+        [review_text(RUBRICS["impl"], fails={"C2": "see `only_in_working_tree`"})],
+        source="def only_in_head():\n    return 1\n",
+        diff="def only_in_working_tree():\n    return 2\n",
+    )
+    outcome, entry, _ = autonodes.HANDLERS["impl_review"](make_state("impl_review"), ctx)
+    assert outcome == "CHANGES"
+    assert entry["reviews"][0]["fails"] == ["C2"]
+    assert entry["reviews"][0]["dropped"] == []
+
+
+def test_us18_impl_review_drops_fail_quoting_only_the_head_commit(tmp_path):
+    ctx, _, _ = make_ctx(
+        tmp_path,
+        [review_text(RUBRICS["impl"], fails={"C2": "see `only_in_head`"})],
+        source="def only_in_head():\n    return 1\n",
+        diff="def only_in_working_tree():\n    return 2\n",
+    )
+    outcome, entry, _ = autonodes.HANDLERS["impl_review"](make_state("impl_review"), ctx)
+    assert outcome == "PASS"
+    assert entry["reviews"][0]["fails"] == []
+    assert entry["reviews"][0]["dropped"] == ["C2"]
