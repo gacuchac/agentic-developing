@@ -108,10 +108,11 @@ def _verify(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     unit = (ctx.run / "unit.md").read_text()
     touched = ctx.touched(ctx.repo)
     disputed = _result(state, "implement").get("tests_disputed", [])
-    entry = {"failed": [], "disputed": disputed, "touched": touched, "reasons": []}
+    entry = {"failed": [], "passed": 0, "disputed": disputed, "touched": touched, "reasons": []}
     if touched:
         return "tests_touched", entry, state
-    entry["failed"] = ctx.tests(ctx.repo, [])["failed"]
+    result = ctx.tests(ctx.repo, [])
+    entry["failed"], entry["passed"] = result["failed"], result["passed"]
     added = _result(state, "qa_write")["tests_added"]
     stray = [f for f in entry["failed"] if f not in units.declared_breaks(unit)]
     hit = [f for f in entry["failed"] if f in added or f.split("::")[0] in added]
@@ -181,14 +182,15 @@ def _subtract_check(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     if not ctx.diff(ctx.repo).strip():
         return "nothing", {}, state
     touched = ctx.touched(ctx.repo)
-    failed = [] if touched else ctx.tests(ctx.repo, [])["failed"]
-    return ("fail" if touched or failed else "pass"), {"touched": touched, "failed": failed}, state
+    result = {"failed": [], "passed": 0} if touched else ctx.tests(ctx.repo, [])
+    entry = {"touched": touched, "failed": result["failed"], "passed": result["passed"]}
+    return ("fail" if touched or entry["failed"] else "pass"), entry, state
 
 
 def _full_suite(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     """Run the whole suite, accepting no declared breaks: `pass` when nothing fails, else `fail`."""
-    failed = ctx.tests(ctx.repo, [])["failed"]
-    return ("fail" if failed else "pass"), {"failed": failed}, state
+    result = ctx.tests(ctx.repo, [])
+    return ("fail" if result["failed"] else "pass"), {"failed": result["failed"], "passed": result["passed"]}, state
 
 
 def _subtract_record(sha: str, touched: list[str], failed: list[str]) -> dict:
