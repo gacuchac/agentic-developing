@@ -4,7 +4,7 @@ description: Light, interview-mode planning in three steps (scope and options, t
 argument-hint: <project>/<task-id> <description of the product or feature>
 ---
 
-Task-id and request: if I gave a task-id, use it; otherwise make a short one from my request and tell me what it is. Planning folder: .claude/runs/<project>/<task-id>/planner/
+Plan id and request: if I gave a plan id, use it; otherwise make a short one from my request and tell me what it is. Planning folder: `~/Developing/<project>/docs/planning/<plan-id>/`, in the project's own repo; make sure the project's `.gitignore` has the line `docs/planning/*/spikes/`.
 
 This is the short version of /planner for time-boxed demos. Say once, in a line, that the full six-step /planner is the normal process. Be brief: no more than 5 lines on what to look at after each step.
 
@@ -24,4 +24,4 @@ Step I3 (solution and PRD), in two parts:
 1. Ask me 3 to 5 questions, one at a time, about the choices that matter most (architecture, contracts, scope). Use the architecture skill for contracts. After each answer, append my decision in my words to 03-decisions.md. That is the only file you write besides progress.md.
 2. When I say we're done, call the planner subagent with the same project and folder and step "I3". It writes 03-solution-prd.md. Point me to it to read, with at most 5 lines on what to look at. Record it in progress.md.
 
-Then ask whether to start `/build <task-id>`.
+Then ask whether to start `/build <project>/<plan-id>`.

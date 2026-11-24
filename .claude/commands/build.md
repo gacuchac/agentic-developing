@@ -5,7 +5,7 @@ disable-model-invocation: true
 ---
 
 My input, `<project>/<plan-id>`: $0
-PRD: ~/Developing/<project>/docs/planning/<plan-id>/06-prd.md, in the project's own repo.
+PRD: ~/Developing/<project>/docs/planning/<plan-id>/06-prd.md, in the project's own repo (03-solution-prd.md when the light planner wrote the plan).
 Build board: .claude/runs/$0/build-board.md
 
 Start or resume:
