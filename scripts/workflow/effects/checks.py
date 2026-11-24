@@ -1,10 +1,12 @@
 """Run a repo's pytest and read the failing test ids."""
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 _FAILURE_LINE = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.M)
 
@@ -38,3 +40,12 @@ def tests_touched(repo: Path) -> list[str]:
 
     paths = git("diff", "--name-only", "HEAD") + git("ls-files", "--others", "--exclude-standard")
     return [p for p in paths if "tests" in Path(p).parent.parts]
+
+
+def _commit_cap() -> ModuleType:
+    """Load scripts/hooks/commit_cap.py, the single source of the cap rules."""
+    path = Path(__file__).resolve().parents[2] / "hooks" / "commit_cap.py"
+    spec = importlib.util.spec_from_file_location("commit_cap", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
