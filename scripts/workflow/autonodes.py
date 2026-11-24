@@ -13,6 +13,10 @@ import state as st
 import units
 
 
+def _no_fix(repo: Path, paths: list[str]) -> None:
+    """Leave the paths as they are."""
+
+
 @dataclass(frozen=True)
 class Ctx:
     """The run's folders and the effects (reviews, tests, git, clock) a handler may use."""
@@ -32,6 +36,7 @@ class Ctx:
     file_at: Callable[[Path, str, str | None], str | None]
     log: Callable[[Path, list[str]], None]
     now: Callable[[], str]
+    fix_imports: Callable[[Path, list[str]], None] = _no_fix
 
 
 Handler = Callable[[dict, Ctx], tuple[str, dict, dict]]
@@ -132,6 +137,7 @@ def _commit_tests(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     paths = ctx.touched(ctx.repo)
     if not paths:
         return "refused", {"message": message, "error": "no test paths to commit"}, state
+    ctx.fix_imports(ctx.repo, paths)
     outcome, entry, new = _commit(state, ctx, message, paths)
     if outcome == "done":
         args = review.review_args("tests", ctx.run, state["plan"], entry["sha"], None)

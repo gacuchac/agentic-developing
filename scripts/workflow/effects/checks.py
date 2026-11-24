@@ -1,6 +1,7 @@
 """Run a repo's pytest and read the failing test ids."""
 from __future__ import annotations
 
+import contextlib
 import re
 import subprocess
 import sys
@@ -38,3 +39,13 @@ def tests_touched(repo: Path) -> list[str]:
 
     paths = git("diff", "--name-only", "HEAD") + git("ls-files", "--others", "--exclude-standard")
     return [p for p in paths if "tests" in Path(p).parent.parts]
+
+
+def fix_imports(repo: Path, paths: list[str]) -> None:
+    """Sort the import blocks of paths in repo with ruff and the workspace ruff.toml; never raises."""
+    config = Path(__file__).resolve().parents[3] / "ruff.toml"
+    with contextlib.suppress(OSError):
+        subprocess.run(
+            ["ruff", "check", "--fix", "--select", "I", "--config", str(config), *paths],
+            cwd=repo, capture_output=True, check=False,
+        )
