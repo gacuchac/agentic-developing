@@ -205,3 +205,19 @@ def test_us9_cli_write_exits_one_and_names_failing_field(tmp_path):
     proc = _write(repo, run, fix)
     assert proc.returncode == 1
     assert "green" in proc.stdout + proc.stderr
+
+
+def test_us9_is_failed_exact_match():
+    assert er.is_failed("tests/a.py::test_x", ["tests/a.py::test_x"]) is True
+
+
+def test_us9_is_failed_parametrized_case_counts():
+    assert er.is_failed("tests/a.py::test_x", ["tests/a.py::test_x[1]"]) is True
+
+
+def test_us9_is_failed_longer_name_does_not_count():
+    assert er.is_failed("tests/a.py::test_x", ["tests/a.py::test_x_extra"]) is False
+
+
+def test_us9_is_failed_empty_failed_list_is_false():
+    assert er.is_failed("tests/a.py::test_x", []) is False
