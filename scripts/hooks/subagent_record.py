@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[2]
@@ -116,11 +117,34 @@ def _pending_step(event: dict, active: Path) -> tuple[Path, str] | None:
     return _from_prompt(event, active) if event.get("agent_transcript_path") else None
 
 
+def _log(active: Path, event: dict, pending: tuple[Path, str] | None, result: dict | None, outcome: str) -> None:
+    """Append one JSON line describing this event and its outcome to `<active>/recorder.log`; skip when unwritable."""
+    line = {
+        "ts": datetime.now().astimezone().isoformat(),
+        "event": event.get("hook_event_name") or "",
+        "agent_id": event.get("agent_id") or "",
+        "agent_type": event.get("agent_type") or "",
+        "session": event.get("session_id") or "",
+        "transcript": bool(event.get("agent_transcript_path")),
+        "step": [str(pending[0]), pending[1]] if pending else None,
+        "result": result is not None,
+        "outcome": outcome,
+    }
+    try:
+        with (active / "recorder.log").open("a") as handle:
+            handle.write(json.dumps(line) + "\n")
+    except Exception:
+        pass
+
+
 def main(stdin: str, active: Path, record: Callable[[Path, str, dict], list[str]]) -> int:
     """Record the result block of a stopping workflow agent; return 2 with the refusal on stderr, else 0.
 
     `record(run, step_id, result)` returns error lines. Missing or invalid input, no registry entry,
-    no pending step for this agent, or no valid block records nothing."""
+    no pending step for this agent, or no valid block records nothing. Each call appends one line to
+    `<active>/recorder.log` with the outcome; logging never changes the return value."""
+    event: dict = {}
+    pending = result = None
     try:
         event = json.loads(stdin)
         pending = _pending_step(event, active)
@@ -130,12 +154,15 @@ def main(stdin: str, active: Path, record: Callable[[Path, str, dict], list[str]
             or _transcript_result(event)
         )
     except Exception:
+        _log(active, event if isinstance(event, dict) else {}, pending, result, "bad input")
         return 0
     if pending is None or result is None:
+        _log(active, event, pending, result, "no step" if pending is None else "no result")
         return 0
     errors = record(pending[0], pending[1], result)
     if errors:
         print("\n".join(errors), file=sys.stderr)
+    _log(active, event, pending, result, "refused" if errors else "recorded")
     return 2 if errors else 0
 
 
