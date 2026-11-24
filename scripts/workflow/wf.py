@@ -130,9 +130,19 @@ def _logger(run: Path) -> object:
     return log
 
 
-def default_ctx(run: Path) -> Ctx:
-    """Return the Ctx of a run folder wired to the real reviews, tests, git, evidence and decision log."""
-    repo = repo_for(run)
+def _stored_checkout(run: Path) -> Path | None:
+    if not (run / "state.json").is_file():
+        return None
+    stored = st.load(run).get("checkout")
+    return Path(stored) if stored else None
+
+
+def default_ctx(run: Path, checkout: Path | None = None) -> Ctx:
+    """Return the Ctx of a run folder wired to the real reviews, tests, git, evidence and decision log.
+
+    ctx.repo is checkout when given, else the checkout stored in run/state.json, else repo_for(run).
+    """
+    repo = checkout or _stored_checkout(run) or repo_for(run)
     venv = repo / ".venv" / "bin" / "python"
     return Ctx(
         run=run,
