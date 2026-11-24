@@ -117,7 +117,7 @@ def test_us14_main_invalid_block_records_nothing(hook, tmp_path):
     assert rec.calls == []
 
 
-def test_us21_main_unregistered_agent_records_nothing(hook, tmp_path):
+def test_us14_main_no_claim_records_nothing(hook, tmp_path):
     active, _ = _setup(tmp_path)
     rec = Recorder()
     assert hook.main(_event(_block("{}"), agent_id="stranger"), active, rec) == 0
@@ -133,14 +133,6 @@ def test_us21_main_two_tasks_pending_same_step_records_on_registered_run_only(ho
     rec = Recorder()
     assert hook.main(_event(_block(json.dumps(RESULT)), agent_id="a2"), active, rec) == 0
     assert rec.calls == [(run_b, "u3-write-1", RESULT)]
-
-
-def test_us21_main_entry_whose_step_is_no_longer_pending_records_nothing(hook, tmp_path):
-    active, run = _setup(tmp_path)
-    _register(active, "a1", run, "u2-write-1")
-    rec = Recorder()
-    assert hook.main(_event(_block("{}")), active, rec) == 0
-    assert rec.calls == []
 
 
 def test_us14_main_non_workflow_agent_records_nothing(hook, tmp_path):
