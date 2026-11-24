@@ -7,12 +7,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "workflow"))
 
 import autonodes  # noqa: E402
+import graph  # noqa: E402
 import state as st  # noqa: E402
 
 ADDED = ["tests/test_a.py::test_one", "tests/test_a.py::test_two"]
 
 
-def make_ctx(tmp_path, tests=None, touched=None):
+def make_ctx(tmp_path, tests=None, touched=None, diff=None):
     calls = []
 
     def run_tests(repo, ids):
@@ -34,7 +35,7 @@ def make_ctx(tmp_path, tests=None, touched=None):
         source=unused,
         commit=unused,
         evidence=unused,
-        diff=unused,
+        diff=(lambda repo: diff) if diff is not None else unused,
         file_at=unused,
         log=lambda *a, **k: None,
         now=lambda: "T",
@@ -153,3 +154,54 @@ def test_us10_red_run_expected_when_added_is_a_file_and_its_tests_fail(tmp_path)
     outcome, _, _ = autonodes.HANDLERS["red_run"](make_state(added=["tests/test_a.py"]), ctx)
     assert outcome == "expected"
 
+
+
+def test_us10_every_auto_node_has_a_handler():
+    auto = [n for n in graph.EDGES if graph.kind(n) == "auto"]
+    assert [n for n in auto if n not in autonodes.HANDLERS] == []
+
+
+def test_us10_subtract_check_nothing_when_the_tree_has_no_edits(tmp_path):
+    ctx, calls = make_ctx(tmp_path, diff="")
+    outcome, _, _ = autonodes.HANDLERS["subtract_check"](make_state(), ctx)
+    assert outcome == "nothing"
+    assert calls == []
+
+
+def test_us10_subtract_check_pass_when_tests_untouched_and_suite_green(tmp_path):
+    ctx, calls = make_ctx(tmp_path, diff="--- a/src/x.py\n+++ b/src/x.py\n-dead\n")
+    outcome, entry, _ = autonodes.HANDLERS["subtract_check"](make_state(), ctx)
+    assert outcome == "pass"
+    assert calls == [[]]
+    assert entry["failed"] == []
+
+
+def test_us10_subtract_check_fail_when_tests_were_touched(tmp_path):
+    ctx, calls = make_ctx(tmp_path, diff="--- a/tests/t.py\n", touched=lambda repo: ["tests/t.py"])
+    outcome, entry, _ = autonodes.HANDLERS["subtract_check"](make_state(), ctx)
+    assert outcome == "fail"
+    assert entry["touched"] == ["tests/t.py"]
+
+
+def test_us10_subtract_check_fail_when_the_suite_fails(tmp_path):
+    red = {"code": 1, "failed": ["tests/t.py::test_a"]}
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: red, diff="--- a/src/x.py\n-dead\n")
+    outcome, entry, _ = autonodes.HANDLERS["subtract_check"](make_state(), ctx)
+    assert outcome == "fail"
+    assert entry["failed"] == ["tests/t.py::test_a"]
+
+
+def test_us10_full_suite_pass_runs_the_whole_suite(tmp_path):
+    ctx, calls = make_ctx(tmp_path)
+    outcome, entry, _ = autonodes.HANDLERS["full_suite"](make_state(), ctx)
+    assert outcome == "pass"
+    assert calls == [[]]
+    assert entry["failed"] == []
+
+
+def test_us10_full_suite_fail_accepts_no_declared_breaks(tmp_path):
+    unit_md(tmp_path, "Breaks: tests/t.py::test_a\n")
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": ["tests/t.py::test_a"]})
+    outcome, entry, _ = autonodes.HANDLERS["full_suite"](make_state(), ctx)
+    assert outcome == "fail"
+    assert entry["failed"] == ["tests/t.py::test_a"]
