@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import subprocess
 from pathlib import Path
 
@@ -321,3 +322,63 @@ def test_x12_nothing_to_review_true_for_skills_only(ws_project):
 def test_x12_nothing_to_review_false_for_ordinary_commit(ws_project):
     _commit("own")
     assert gate.nothing_to_review(Path.cwd()) is False
+
+
+_COMPLETE = {
+    "code_changed": True, "added": ["t.py::a"], "red": ["t.py::a"], "green": ["t.py::a"],
+    "failed": [], "breaks": [], "tests_touched": [], "uncovered": [],
+}
+
+
+def _tests_review(folder, sha, code):
+    (folder / "review-tests-1.md").write_text(
+        f"<!-- pass: tests | model: m | base: commit {sha} | exit: {code} | t -->\nbody\n"
+    )
+
+
+def test_us2_reviewed_true_for_tests_review_exit_zero(tmp_path):
+    _tests_review(tmp_path, SHA, 0)
+    assert gate.reviewed(tmp_path, SHA) is True
+
+
+def test_us2_reviewed_false_for_tests_review_exit_one(tmp_path):
+    _tests_review(tmp_path, SHA, 1)
+    assert gate.reviewed(tmp_path, SHA) is False
+
+
+def test_us2_reviewed_true_for_complete_evidence_record_full_sha(tmp_path):
+    (tmp_path / f"evidence-{SHA}.json").write_text(json.dumps(_COMPLETE))
+    assert gate.reviewed(tmp_path, SHA) is True
+
+
+def test_us2_reviewed_true_for_complete_evidence_record_short_sha(tmp_path):
+    (tmp_path / "evidence-abc1234.json").write_text(json.dumps(_COMPLETE))
+    assert gate.reviewed(tmp_path, "abc1234") is True
+
+
+def test_us2_reviewed_false_for_incomplete_evidence_record(tmp_path):
+    (tmp_path / f"evidence-{SHA}.json").write_text(json.dumps({**_COMPLETE, "green": []}))
+    assert gate.reviewed(tmp_path, SHA) is False
+
+
+def test_us2_reviewed_false_for_invalid_json_evidence(tmp_path):
+    (tmp_path / f"evidence-{SHA}.json").write_text("{not json")
+    assert gate.reviewed(tmp_path, SHA) is False
+
+
+def test_us2_reviewed_true_for_commit_review_still(tmp_path):
+    (tmp_path / "review-commit-2.md").write_text(_header("commit", SHA))
+    assert gate.reviewed(tmp_path, SHA) is True
+
+
+def test_us2_reviewed_false_with_no_files(tmp_path):
+    assert gate.reviewed(tmp_path, SHA) is False
+
+
+def test_us2_gate_message_names_all_three_ways_to_unblock(ws_project, capsys):
+    _commit("own")
+    assert gate.main(ws_project) == 1
+    err = capsys.readouterr().err.lower()
+    assert "commit review" in err
+    assert "tests review" in err
+    assert "evidence" in err
