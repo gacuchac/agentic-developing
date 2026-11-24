@@ -43,8 +43,15 @@ def failing_fields(record: dict) -> list[str]:
     return [name for name, good in ok.items() if not good]
 
 
+def subtract_record(sha: str, touched: list[str], failed: list[str]) -> dict:
+    """Return the evidence record of a clean-up commit `sha`: tests it touched and tests failing in the suite."""
+    return {"kind": "subtract", "sha": sha, "tests_touched": touched, "suite_failed": failed}
+
+
 def complete(record: dict) -> bool:
-    """Return True when every field is present and none keeps the record from being complete."""
+    """Return True for a subtract record with a sha and no touched or failed tests, else when a unit record passes."""
+    if record.get("kind") == "subtract":
+        return bool(record["sha"]) and not record["tests_touched"] and not record["suite_failed"]
     return all(f in record for f in _FIELDS) and not failing_fields(record)
 
 
