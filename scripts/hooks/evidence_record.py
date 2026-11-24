@@ -102,6 +102,15 @@ def _test_commit(repo: Path, sha: str, given: str | None) -> str | None:
     return _git(repo, "rev-parse", given).strip() if given else tests_commit(repo, sha)
 
 
+def _touched_tests(repo: Path, commit: str | None, sha: str) -> list[str]:
+    base = commit or f"{sha}^"
+    if commit:
+        log = _git(repo, "log", "--format=%H %s", f"{commit}..{sha}").splitlines()
+        base = next((line.split()[0] for line in log if line.partition(" ")[2].startswith("test(")), commit)
+    paths = _git(repo, "diff", "--name-only", base, sha).split()
+    return [p for p in paths if "tests" in Path(p).parts[:-1]]
+
+
 def measure(repo: Path, run: Path, sha: str, python: Path, tests_commit: str | None = None) -> dict:
     """Return the evidence record of the fix commit `sha` in `repo` (fields: see architecture.md).
 
@@ -121,7 +130,7 @@ def measure(repo: Path, run: Path, sha: str, python: Path, tests_commit: str | N
         "green": [t for t in added if not is_failed(t, failed)],
         "failed": failed,
         "breaks": declared_breaks(run),
-        "tests_touched": [p for p in _git(repo, "diff", "--name-only", span).split() if "tests" in Path(p).parts[:-1]],
+        "tests_touched": _touched_tests(repo, commit, sha),
         "uncovered": sorted(contracts.uncovered(names, (run / "architecture.md").read_text())),
         "code_changed": any("tests" not in Path(p).parts[:-1] and not p.endswith(".md") for p in paths),
     }
