@@ -227,3 +227,21 @@ def test_us18_commit_subtract_passes_no_tests_commit(tmp_path):
     state["history"].append({"node": "subtract", "result": {"removed": "x", "files": {}}})
     autonodes.HANDLERS["commit_subtract"](state, ctx)
     assert calls["evidence"] == [(ctx.repo, tmp_path, SHA, ctx.python, None)]
+
+
+def test_us18_commit_tests_fixes_imports_of_touched_paths_before_committing(tmp_path):
+    ctx, state, calls = _make(tmp_path, touched=("tests/a.py", "tests/b.py"))
+    events = []
+    real_commit = ctx.commit
+
+    def commit(repo, message, paths):
+        events.append("commit")
+        return real_commit(repo, message, paths)
+
+    def fix_imports(repo, paths):
+        events.append(("fix", repo, list(paths)))
+
+    ctx = dataclasses.replace(ctx, commit=commit, fix_imports=fix_imports)
+    outcome, _, _ = autonodes.HANDLERS["commit_tests"](state, ctx)
+    assert outcome == "done"
+    assert events == [("fix", ctx.repo, ["tests/a.py", "tests/b.py"]), "commit"]

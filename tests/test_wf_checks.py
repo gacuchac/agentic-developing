@@ -107,3 +107,20 @@ def test_us10_tests_touched_ignores_non_test_changes(tmp_path):
 def test_us10_tests_touched_empty_on_clean_tree(tmp_path):
     repo = _tmp_repo(tmp_path)
     assert checks.tests_touched(repo) == []
+
+
+def test_us18_fix_imports_sorts_an_unsorted_import_block(tmp_path):
+    (tmp_path / "tests").mkdir()
+    test_file = tmp_path / "tests" / "test_a.py"
+    test_file.write_text("import sys\nimport os\n\n\ndef test_a():\n    assert os and sys\n")
+    checks.fix_imports(tmp_path, ["tests/test_a.py"])
+    assert test_file.read_text() == "import os\nimport sys\n\n\ndef test_a():\n    assert os and sys\n"
+
+
+def test_us18_fix_imports_leaves_a_sorted_block_unchanged(tmp_path):
+    (tmp_path / "tests").mkdir()
+    test_file = tmp_path / "tests" / "test_a.py"
+    text = "import os\nimport sys\n\n\ndef test_a():\n    assert os and sys\n"
+    test_file.write_text(text)
+    checks.fix_imports(tmp_path, ["tests/test_a.py"])
+    assert test_file.read_text() == text
