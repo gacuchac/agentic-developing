@@ -17,6 +17,7 @@ from effects import claimfiles  # noqa: E402
 
 BLOCK = re.compile(r"```workflow-result\s*\n(.*?)\n\s*```", re.DOTALL)
 STEP_LINE = re.compile(r"^wf-step:\s*(\S+)", re.MULTILINE)
+RUN_LINE = re.compile(r"^Run folder:\s*(\S+)", re.MULTILINE)
 
 
 def extract_result(message: str) -> dict | None:
@@ -46,20 +47,44 @@ def real_record(run: Path, step_id: str, result: dict) -> list[str]:
     return done.stderr.splitlines() if done.returncode else []
 
 
-def _pending_step(event: dict, active: Path) -> tuple[Path, str] | None:
-    """Return (run folder, step id) of the agent's registered entry when that run is pending it for the agent type."""
-    entry = claimfiles.read(active / "agents", f"{event.get('agent_id')}.json")
-    if not entry:
-        return None
-    run = Path(entry["run"])
+def _prompt_of(transcript: Path) -> str:
+    """Return the text of the first user record of the JSONL `transcript`, or "" when there is none."""
+    for line in transcript.read_text().splitlines():
+        message = json.loads(line).get("message") or {}
+        if message.get("role") == "user":
+            content = message.get("content")
+            return content if isinstance(content, str) else "".join(part.get("text", "") for part in content)
+    return ""
+
+
+def _is_pending(run: Path, step_id: str, agent_type: str | None) -> bool:
+    """Return True when `run`'s state is pending the agent step `step_id` for `agent_type`."""
     pending = (json.loads((run / "state.json").read_text()).get("pending")) or {}
-    if (
-        pending.get("kind") != "agent"
-        or pending.get("agent") != event.get("agent_type")
-        or pending.get("step_id") != entry["step_id"]
-    ):
+    return pending.get("kind") == "agent" and pending.get("agent") == agent_type and pending.get("step_id") == step_id
+
+
+def _from_prompt(event: dict, active: Path) -> tuple[Path, str] | None:
+    """Return (run, step id) named in the agent's own prompt when this session holds that run and it is pending."""
+    prompt = _prompt_of(Path(event["agent_transcript_path"]))
+    step_id = step_id_of(prompt)
+    match = RUN_LINE.search(prompt)
+    if step_id is None or match is None:
         return None
-    return run, entry["step_id"]
+    run = Path(match.group(1))
+    claims = (claimfiles.read(active, p.name) or {} for p in active.glob("*.json"))
+    held = any(c.get("run") == str(run) and c.get("session") == event.get("session_id") for c in claims)
+    return (run, step_id) if held and _is_pending(run, step_id, event.get("agent_type")) else None
+
+
+def _pending_step(event: dict, active: Path) -> tuple[Path, str] | None:
+    """Return (run folder, step id) the agent reports for: its registry entry, else the prompt in its transcript.
+
+    The step must be pending for the agent type; a prompt's run must also be held by the event's session."""
+    entry = claimfiles.read(active / "agents", f"{event.get('agent_id')}.json")
+    if entry:
+        run = Path(entry["run"])
+        return (run, entry["step_id"]) if _is_pending(run, entry["step_id"], event.get("agent_type")) else None
+    return _from_prompt(event, active) if event.get("agent_transcript_path") else None
 
 
 def main(stdin: str, active: Path, record: Callable[[Path, str, dict], list[str]]) -> int:
