@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import argparse
 import importlib.util
+import json
 import os
 import re
 import subprocess
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -114,3 +117,24 @@ def measure(repo: Path, run: Path, sha: str, python: Path) -> dict:
         "uncovered": sorted(contracts.uncovered(names, (run / "architecture.md").read_text())),
         "code_changed": any("tests" not in Path(p).parts[:-1] and not p.endswith(".md") for p in paths),
     }
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run `write --run <run> [--sha] [--python]` in the current repo; return 0 when the record is complete."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=["write"])
+    parser.add_argument("--run", type=Path, required=True)
+    parser.add_argument("--sha", default="HEAD")
+    parser.add_argument("--python", type=Path, default=Path(sys.executable))
+    args = parser.parse_args(argv)
+    sha = _git(Path.cwd(), "rev-parse", args.sha).strip()
+    record = measure(Path.cwd(), args.run, sha, args.python)
+    (args.run / f"evidence-{sha}.json").write_text(json.dumps(record, indent=2))
+    failing = failing_fields(record)
+    if failing:
+        print("incomplete: " + ", ".join(failing))
+    return int(bool(failing))
+
+
+if __name__ == "__main__":
+    sys.exit(main())
