@@ -109,3 +109,11 @@ def test_us6_unit_history_does_not_mutate_the_state():
     before = json.dumps(s)
     state.unit_history(s)
     assert json.dumps(s) == before
+
+
+def test_us19_new_state_stores_checkout():
+    assert state.new_state("t", "b", "l", checkout="/x")["checkout"] == "/x"
+
+
+def test_us19_new_state_checkout_defaults_to_none():
+    assert state.new_state("t", "b", "l")["checkout"] is None

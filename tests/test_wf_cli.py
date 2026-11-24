@@ -154,3 +154,16 @@ def test_us18_report_lists_dropped_findings(env):
     assert r.returncode == 0, r.stderr
     assert "## Dropped findings" in r.stdout
     assert "dropped: alternatives L1 (review-alternatives-1.md)" in r.stdout
+
+
+def test_us19_start_on_worktree_records_checkout_mode_and_branch(env):
+    run, repo = env
+    wt = repo.parent / "wt"
+    _g(repo, "worktree", "add", "-q", "-b", "feature/wt", str(wt), "dev")
+    r = wf("start", run, "--plan", "plan.md", "--checkout", wt, "--mode", "parallel")
+    assert r.returncode == 0, r.stderr
+    state = json.loads((run / "state.json").read_text())
+    assert state["checkout"] == str(wt.resolve())
+    assert state["mode"] == "parallel"
+    assert state["branch"] == "feature/wt"
+
