@@ -53,3 +53,15 @@ def _write_unit(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
         unit = units.fix_text(unit, f"{fix} on {state['head']}", lines)
     (ctx.run / "unit.md").write_text(unit)
     return "done", {}, state
+
+
+def _next_unit(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
+    """Return `finished` in the finish stage, `more` with the next unit and fix 0, else `last`."""
+    if state["stage"] == "finish":
+        return "finished", {}, state
+    if state["unit"] < len(units.plan_units((ctx.run / state["plan"]).read_text())):
+        return "more", {}, {**state, "unit": state["unit"] + 1, "fix": 0}
+    return "last", {}, state
+
+
+HANDLERS: dict[str, Handler] = {"write_unit": _write_unit, "next_unit": _next_unit}
