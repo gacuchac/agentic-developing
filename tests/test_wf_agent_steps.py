@@ -277,3 +277,29 @@ def test_us10_template_without_placeholders_is_returned_as_is():
 def test_us10_template_unknown_placeholder_raises_keyerror():
     with pytest.raises(KeyError):
         render(template="hello {nope}")
+
+
+# ---- the result example follows the step (US-17) ----
+
+
+def test_us17_result_keys_map_each_step_to_its_result_shape():
+    assert agent_steps.RESULT_KEYS == {
+        "write": "qa",
+        "fix": "qa_fix",
+        "code": "implementer",
+        "subtract": "subtract",
+    }
+
+
+def test_us17_default_prompt_for_subtract_shows_subtract_shape():
+    out = render("implementer", "subtract")
+    assert '"removed"' in out and '"tests_disputed"' not in out
+
+
+def test_us17_default_prompt_for_fix_shows_qa_fix_shape():
+    assert '"tests_changed"' in render("qa", "fix")
+
+
+def test_us17_template_schema_for_subtract_is_the_subtract_example():
+    out = render("implementer", "subtract", template="{schema}")
+    assert json.loads(out) == agent_steps.EXAMPLES["subtract"]
