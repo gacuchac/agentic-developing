@@ -199,6 +199,7 @@ def default_ctx(run: Path, checkout: Path | None = None) -> Ctx:
         evidence=_measure(),
         diff=gitops.worktree_diff,
         file_at=gitops.file_at,
+        log_text=gitops.log_text,
         log=_logger(run),
         now=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"),
     )

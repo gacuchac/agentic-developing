@@ -114,3 +114,14 @@ def test_us9_worktree_diff_leaves_index_untouched(repo: Path) -> None:
     before = _git(repo, "status", "--porcelain")
     gitops.worktree_diff(repo)
     assert _git(repo, "status", "--porcelain") == before
+
+
+def test_us32_log_text_has_the_commit_subject_and_changed_file(repo: Path) -> None:
+    base = _git(repo, "rev-parse", "HEAD").strip()
+    _write(repo, "src/x.py", "x = 1\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "US-1: add x")
+    text = gitops.log_text(repo, base)
+    assert "US-1: add x" in text
+    assert "src/x.py" in text
+    assert "init" not in text

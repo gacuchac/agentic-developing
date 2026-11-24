@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -39,6 +40,7 @@ class Ctx:
     fix_imports: Callable[[Path, list[str]], None] = _no_fix
     size: Callable[[Path], dict[str, int]] = lambda _repo: {}
     added: Callable[[Path], list[str]] = lambda _repo: []
+    log_text: Callable[[Path, str], str] = lambda _repo, _base: ""
 
 
 Handler = Callable[[dict, Ctx], tuple[str, dict, dict]]
@@ -189,11 +191,27 @@ def _full_suite(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     return ("fail" if failed else "pass"), {"failed": failed}, state
 
 
+def _subtract_record(sha: str, touched: list[str], failed: list[str]) -> dict:
+    """Return `evidence_record.subtract_record(sha, touched, failed)`, loaded from the hooks folder."""
+    path = Path(__file__).resolve().parents[1] / "hooks" / "evidence_record.py"
+    spec = importlib.util.spec_from_file_location("evidence_record", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.subtract_record(sha, touched, failed)
+
+
 def _commit_subtract(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
-    """Commit everything as `<stories>: Subtract: <summary>` and record evidence; `refused` if a hook fails."""
+    """Commit all as `<stories>: Subtract: <summary>` and write its subtract record; `refused` if a hook fails."""
     stories = units.commit_message((ctx.run / "unit.md").read_text()).split(": ", 1)[0]
     message = f"{stories}: Subtract: {_result(state, 'subtract')['removed']}"
-    return _commit_all(state, ctx, "commit_subtract", message, None)
+    outcome, entry, new = _commit(state, ctx, "commit_subtract", message, None)
+    if outcome == "done":
+        check = _result(state, "subtract_check")
+        record = _subtract_record(entry["sha"], check["touched"], check["failed"])
+        path = ctx.run / f"evidence-{entry['sha']}.json"
+        path.write_text(json.dumps(record))
+        entry = {**entry, "evidence": str(path)}
+    return outcome, entry, new
 
 
 def _scope(state: dict) -> tuple[str | None, str | None]:
@@ -201,11 +219,21 @@ def _scope(state: dict) -> tuple[str | None, str | None]:
     return (None if base or state["node"] == "impl_review" else state["head"]), base
 
 
+def _review_source(state: dict, ctx: Ctx) -> str:
+    """Return the text a review's quotes are checked against at this node."""
+    if state["node"] == "impl_review":
+        return ctx.diff(ctx.repo)
+    if state["node"] != "answers_ask":
+        return ctx.source(ctx.repo, *_scope(state))
+    log = ctx.run / "decisions.tsv"
+    return ctx.log_text(ctx.repo, state["launch"]) + (log.read_text() if log.is_file() else "")
+
+
 def _judge(name: str, path: Path | None, state: dict, ctx: Ctx) -> dict:
     """Derive one pass's verdict from its saved review; a None path is MALFORMED."""
     if path is None:
         return {"pass": name, "review": None, "verdict": "MALFORMED", "fails": [], "dropped": []}
-    source = ctx.diff(ctx.repo) if state["node"] == "impl_review" else ctx.source(ctx.repo, *_scope(state))
+    source = _review_source(state, ctx)
     text = path.read_text()
     verdict, fails = review.derive_verdict(text, review.expected_ids(name, ctx.repo), source)
     dropped = [] if verdict == "MALFORMED" else review.dropped_fails(text, source)
