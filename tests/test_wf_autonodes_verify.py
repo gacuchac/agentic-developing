@@ -13,7 +13,7 @@ import state as st  # noqa: E402
 ADDED = ["tests/test_a.py::test_one", "tests/test_a.py::test_two"]
 
 
-def make_ctx(tmp_path, tests=None, touched=None, diff=None, size=None):
+def make_ctx(tmp_path, tests=None, touched=None, diff=None, size=None, added=None):
     calls = []
 
     def run_tests(repo, ids):
@@ -24,6 +24,8 @@ def make_ctx(tmp_path, tests=None, touched=None, diff=None, size=None):
         raise AssertionError("unexpected call")
 
     extra = {"size": size} if size is not None else {}
+    if added is not None:
+        extra["added"] = added
     ctx = autonodes.Ctx(
         run=tmp_path,
         repo=tmp_path / "repo",
@@ -92,6 +94,30 @@ def test_us10_red_run_unexpected_when_qa_reason_not_expected(tmp_path):
     ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": list(ADDED)})
     outcome, _, _ = autonodes.HANDLERS["red_run"](make_state(reason=False), ctx)
     assert outcome == "unexpected"
+
+
+def test_us18_red_run_names_added_test_that_passes_as_not_red(tmp_path):
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": [ADDED[0]]}, added=lambda repo: list(ADDED))
+    outcome, entry, _ = autonodes.HANDLERS["red_run"](make_state(), ctx)
+    assert outcome == "unexpected"
+    assert entry == {"tests": ADDED, "failed": [ADDED[0]], "claimed": {"failed": ADDED, "reason_expected": True}, "not_red": [ADDED[1]]}
+    assert json.loads((tmp_path / "red.json").read_text()) == entry
+
+
+def test_us18_red_run_not_red_comes_from_ctx_added_not_qa_claim(tmp_path):
+    extra = "tests/test_b.py::test_three"
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": list(ADDED)}, added=lambda repo: [*ADDED, extra])
+    outcome, entry, _ = autonodes.HANDLERS["red_run"](make_state(), ctx)
+    assert outcome == "unexpected"
+    assert entry["not_red"] == [extra]
+
+
+def test_us18_red_run_all_added_failing_is_expected_with_empty_not_red(tmp_path):
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": list(ADDED)}, added=lambda repo: list(ADDED))
+    outcome, entry, _ = autonodes.HANDLERS["red_run"](make_state(), ctx)
+    assert outcome == "expected"
+    assert entry == {"tests": ADDED, "failed": ADDED, "claimed": {"failed": ADDED, "reason_expected": True}, "not_red": []}
+    assert json.loads((tmp_path / "red.json").read_text()) == entry
 
 
 def test_us10_verify_tests_touched_even_when_suite_green(tmp_path):

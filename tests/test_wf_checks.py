@@ -182,3 +182,24 @@ def test_us24_change_size_stages_nothing(tmp_path):
     assert staged.stdout == ""
     after = subprocess.run(["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True, check=True).stdout
     assert after == before
+
+
+def test_us18_added_tests_lists_untracked_and_added_tests_and_stages_nothing(tmp_path):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_old.py").write_text("def test_one():\n    assert True\n")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    (tmp_path / "tests" / "test_old.py").write_text(
+        "def test_one():\n    assert True\n\n\ndef test_two():\n    assert True\n"
+    )
+    (tmp_path / "tests" / "test_new.py").write_text(
+        "def test_a():\n    assert True\n\n\ndef test_b():\n    assert True\n"
+    )
+    assert sorted(checks.added_tests(tmp_path)) == [
+        "tests/test_new.py::test_a",
+        "tests/test_new.py::test_b",
+        "tests/test_old.py::test_two",
+    ]
+    staged = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=tmp_path, capture_output=True, text=True, check=True)
+    assert staged.stdout == ""
