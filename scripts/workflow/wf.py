@@ -45,6 +45,16 @@ def status_text(state: dict, last: int = 5) -> str:
     return "\n".join(lines)
 
 
+def dropped_text(state: dict) -> str:
+    """Return a `dropped: <pass> <ids> (<review file name>)` line per history review that dropped a FAIL; "" if none."""
+    return "\n".join(
+        f"dropped: {r['pass']} {' '.join(r['dropped'])} ({Path(r['review']).name})"
+        for e in state.get("history", [])
+        for r in e.get("reviews", [])
+        if r.get("dropped")
+    )
+
+
 def report_text(log: str) -> str:
     """Return Decisions, Dismissals, Commits and Ratchet candidates sections for the text of decisions.tsv."""
     rows = [line.split("\t") for line in log.splitlines()[1:] if line]
@@ -244,7 +254,10 @@ def root_warning(root_branch: str, task_is_root: bool) -> str | None:
 
 def _show(args: argparse.Namespace, ctx: Ctx) -> None:
     if args.cmd == "status":
-        print(status_text(st.load(args.run)))
+        state = st.load(args.run)
+        print(status_text(state))
+        if dropped_text(state):
+            print(dropped_text(state))
         print(_holder_line(args.run))
         workspace = args.run.parents[3]
         branch = gitops.current_branch(workspace)
@@ -256,6 +269,7 @@ def _show(args: argparse.Namespace, ctx: Ctx) -> None:
     else:
         log = args.run / "decisions.tsv"
         print(report_text(log.read_text() if log.is_file() else ""))
+        print("## Dropped findings\n" + dropped_text(st.load(args.run)))
 
 
 def main(argv: list[str] | None = None) -> int:
