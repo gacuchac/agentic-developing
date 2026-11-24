@@ -35,3 +35,15 @@ def worktree_diff(repo: Path) -> str:
     for p in _git(repo, "ls-files", "--others", "--exclude-standard").splitlines():
         out += f"--- /dev/null\n+++ b/{p}\n+" + "\n+".join((repo / p).read_text().splitlines()) + "\n"
     return out
+
+
+def launch_info(repo: Path) -> tuple[str, str]:
+    """Return (current branch, merge-base of HEAD and dev); RuntimeError when there is no dev or HEAD is detached."""
+    try:
+        branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip()
+        launch = _git(repo, "merge-base", "HEAD", "dev").strip()
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(e.stderr) from e
+    if branch == "HEAD":
+        raise RuntimeError("HEAD is detached")
+    return branch, launch

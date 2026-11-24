@@ -6,7 +6,7 @@ import importlib.util
 import re
 from pathlib import Path
 
-from scripts.workflow.evidence import quote_in
+from evidence import quote_in
 
 
 def rubric_ids(rubric: str) -> list[str]:

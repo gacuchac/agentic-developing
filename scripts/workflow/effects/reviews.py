@@ -7,7 +7,7 @@ import sys
 import time
 from pathlib import Path
 
-from scripts.workflow.review import saved_path
+from review import saved_path
 
 _CODEX_REVIEW = Path(__file__).resolve().parents[2] / "codex_review.py"
 
