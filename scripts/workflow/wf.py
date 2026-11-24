@@ -181,3 +181,33 @@ def _run(args: argparse.Namespace, ctx: Ctx) -> tuple[dict | None, list[str]]:
         evidence = json.loads(args.evidence.read_text()) if args.evidence else {}
         return engine.take(state, args.option, evidence, ctx)
     return engine.record(state, args.step_id, json.loads(args.result.read_text()), ctx)
+
+
+def _show(args: argparse.Namespace, ctx: Ctx) -> None:
+    if args.cmd == "status":
+        print(status_text(st.load(args.run)))
+    elif args.cmd == "options":
+        print(json.dumps(options_view(st.load(args.run), ctx), indent=2))
+    else:
+        log = args.run / "decisions.tsv"
+        print(report_text(log.read_text() if log.is_file() else ""))
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run one wf command; return 0, or 1 after printing the refusal errors to stderr with nothing saved."""
+    args = _parser().parse_args(argv)
+    ctx = default_ctx(args.run)
+    if args.cmd not in ("start", "take", "record"):
+        _show(args, ctx)
+        return 0
+    state, errors = _run(args, ctx)
+    if errors:
+        print("\n".join(errors), file=sys.stderr)
+        return 1
+    st.save(args.run, state)
+    print(status_text(state))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
