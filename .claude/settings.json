@@ -97,6 +97,16 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}\"/scripts/hooks/agent_registry.py",
+            "timeout": 10
+          }
+        ]
       }
     ]
   },
