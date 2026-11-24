@@ -77,6 +77,35 @@ def repo_for(run: Path) -> Path:
     return workspace if run.parent.name == workspace.name else workspace / run.parent.name
 
 
+def _finding_line(history: list[dict], finding_id: str) -> str:
+    for entry in reversed(history):
+        for review in entry.get("reviews", []):
+            if finding_id in review.get("fails", []):
+                for line in Path(review["review"]).read_text().splitlines():
+                    if line.startswith(f"{finding_id}:"):
+                        return line
+    return f"{finding_id}:"
+
+
+def _fix_lines(history: list[dict]) -> list[str]:
+    last = (history or [{}])[-1]
+    if not str(last.get("node", "")).endswith("_decide"):
+        return []
+    evidence, decision = last.get("evidence", {}), last.get("decision")
+    if decision == "correct":
+        return [f"{_finding_line(history, f['id'])}\nDecision: {f['reason']}" for f in evidence.get("findings", [])]
+    if decision == "tests_wrong":
+        return [f"Test: {evidence['test']}", f"Plan line: {evidence['quote']}"]
+    if decision == "code_wrong":
+        return ["Failing tests: " + ", ".join(evidence["tests"])]
+    return []
+
+
+def _fix_section(history: list[dict]) -> str:
+    lines = _fix_lines(history)
+    return "\n\nWhat to fix\n" + "\n".join(lines) + "\n" if lines else ""
+
+
 def _launch(state: dict, ctx: Ctx) -> dict:
     pending = state["pending"]
     agent, step, step_id = pending["agent"], pending["step"], pending["step_id"]
@@ -92,7 +121,8 @@ def _launch(state: dict, ctx: Ctx) -> dict:
         file.read_text() if file.is_file() else None,
     )
     error = (state["history"] or [{}])[-1].get("error", "")
-    return {"id": "launch", "kind": "agent", "agent": agent, "step_id": step_id, "prompt": prompt + error}
+    prompt += _fix_section(state["history"]) + error
+    return {"id": "launch", "kind": "agent", "agent": agent, "step_id": step_id, "prompt": prompt}
 
 
 def options_view(state: dict, ctx: Ctx) -> list[dict]:
