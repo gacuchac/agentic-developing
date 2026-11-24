@@ -259,3 +259,55 @@ def test_us24_estimate_without_number_is_none():
 
 def test_us24_estimate_without_tilde():
     assert units.unit_estimate("### 1. T\nEstimate: 7 lines.\n") == 7
+
+
+SCOPE_MD = "### 1. T (US-24)\nEstimate: ~14 lines. Files: `scripts/a.py`, `test_b.py`.\n"
+
+
+def test_us24_scope_inside_named_files_and_under_limit_gives_empty():
+    assert units.scope_reasons(SCOPE_MD, {"scripts/a.py": 10, "tests/test_b.py": 5}) == []
+
+
+def test_us24_scope_no_changes_gives_empty():
+    assert units.scope_reasons(SCOPE_MD, {}) == []
+
+
+def test_us24_scope_unnamed_path_is_outside():
+    assert units.scope_reasons(SCOPE_MD, {"scripts/a.py": 3, "x/other.py": 2}) == ["outside: x/other.py"]
+
+
+def test_us24_scope_outside_lists_all_paths_comma_separated():
+    got = units.scope_reasons(SCOPE_MD, {"x/o1.py": 1, "x/o2.py": 1})
+    assert got == ["outside: x/o1.py, x/o2.py"]
+
+
+def test_us24_scope_suffix_must_follow_a_slash():
+    assert units.scope_reasons(SCOPE_MD, {"mytest_b.py": 1}) == ["outside: mytest_b.py"]
+
+
+def test_us24_scope_unit_without_files_makes_every_path_outside():
+    md = "### 1. T (US-24)\nLane: fast\n"
+    assert units.scope_reasons(md, {"a.py": 1}) == ["outside: a.py"]
+
+
+def test_us24_scope_no_estimate_limit_is_30():
+    md = "### 1. T (US-24)\nFiles: `a.py`.\n"
+    assert units.scope_reasons(md, {"a.py": 30}) == []
+    assert units.scope_reasons(md, {"a.py": 31}) == ["size: 31 lines, limit 30"]
+
+
+def test_us24_scope_estimate_doubles_the_limit():
+    md = "### 1. T (US-24)\nEstimate: ~20 lines. Files: `a.py`.\n"
+    assert units.scope_reasons(md, {"a.py": 31}) == []
+    assert units.scope_reasons(md, {"a.py": 41}) == ["size: 41 lines, limit 40"]
+
+
+def test_us24_scope_size_sums_all_files():
+    md = "### 1. T (US-24)\nFiles: `a.py`, `b.py`.\n"
+    assert units.scope_reasons(md, {"a.py": 20, "b.py": 11}) == ["size: 31 lines, limit 30"]
+
+
+def test_us24_scope_both_problems_outside_first():
+    md = "### 1. T (US-24)\nFiles: `a.py`.\n"
+    got = units.scope_reasons(md, {"a.py": 20, "z.py": 11})
+    assert got == ["outside: z.py", "size: 31 lines, limit 30"]
