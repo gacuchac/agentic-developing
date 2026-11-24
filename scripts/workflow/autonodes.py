@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import graph
 import review
 import units
 
@@ -154,6 +155,25 @@ def _judge(name: str, path: Path | None, state: dict, ctx: Ctx) -> dict:
     return {"pass": name, "review": str(path), "verdict": verdict, "fails": fails, "dropped": dropped}
 
 
+def _pass_reviews(name: str, state: dict, ctx: Ctx) -> list[dict]:
+    """Return the pass's reviews: the first, plus a foreground rerun if it was MALFORMED."""
+    args = review.review_args(name, ctx.run, state["plan"], *_scope(state))
+    collected = state["node"] == "tests_review"
+    path = ctx.collect_review(state["review"]) if collected else ctx.run_review(args, ctx.repo)
+    first = _judge(name, path, state, ctx)
+    if first["verdict"] != "MALFORMED":
+        return [first]
+    return [first, _judge(name, ctx.run_review(args, ctx.repo), state, ctx)]
+
+
+def _review(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
+    """Judge each of the node's review passes; outcome MALFORMED, else CHANGES if any pass has FAILs, else PASS."""
+    per_pass = [_pass_reviews(name, state, ctx) for name in graph.REVIEW_PASSES[state["node"]]]
+    finals = {rs[-1]["verdict"] for rs in per_pass}
+    outcome = next(v for v in ("MALFORMED", "CHANGES") if v in finals) if finals - {"PASS"} else "PASS"
+    return outcome, {"verdict": outcome, "reviews": [r for rs in per_pass for r in rs]}, state
+
+
 HANDLERS: dict[str, Handler] = {
     "write_unit": _write_unit,
     "next_unit": _next_unit,
@@ -162,4 +182,8 @@ HANDLERS: dict[str, Handler] = {
     "commit_tests": _commit_tests,
     "commit_fix": _commit_fix,
     "commit_subtract": _commit_subtract,
+    "tests_review": _review,
+    "impl_review": _review,
+    "branch_reviews": _review,
+    "answers_ask": _review,
 }
