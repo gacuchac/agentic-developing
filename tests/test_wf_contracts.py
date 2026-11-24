@@ -94,3 +94,19 @@ def test_us7_uncovered_needs_status_and_approved_on_same_line():
 
 def test_us7_uncovered_empty_names_gives_empty():
     assert contracts.uncovered(set(), "no approval here") == set()
+
+
+def test_us7_uncovered_not_approved_status_line_is_not_approval():
+    assert contracts.uncovered({"f"}, "Status: not approved\nChanges f.") == {"f"}
+
+
+def test_us7_uncovered_bold_approved_status_with_date_counts_as_approval():
+    assert contracts.uncovered({"f"}, "Status: **approved** (2026-11-23)\nChanges f.") == set()
+
+
+def test_us7_uncovered_word_approved_outside_status_line_is_not_approval():
+    assert contracts.uncovered({"f"}, "Status: proposed\napproved by nobody; f") == {"f"}
+
+
+def test_us7_uncovered_uppercase_status_approved_with_named_function_gives_empty():
+    assert contracts.uncovered({"f"}, "status: APPROVED\nf") == set()
