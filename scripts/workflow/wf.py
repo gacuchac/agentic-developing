@@ -337,7 +337,7 @@ def _show(args: argparse.Namespace, ctx: Ctx) -> None:
 def main(argv: list[str] | None = None) -> int:
     """Run one wf command; return 0; 2 when another session holds the task; 1 on refusal errors (printed to stderr)."""
     args = _parser().parse_args(argv)
-    ctx = default_ctx(args.run)
+    ctx = default_ctx(args.run, args.checkout.resolve() if getattr(args, "checkout", None) else None)
     if args.cmd == "release":
         errors = run_release(args.run, args.reason, os.environ, ctx)
         if errors:
