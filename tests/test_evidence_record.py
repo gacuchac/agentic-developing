@@ -304,3 +304,28 @@ def test_us9_measure_without_architecture_file_reports_a_changed_signature(tmp_p
     (run / "architecture.md").unlink()
     fix = _commit(repo, "US-1: fix", {"src/a.py": "def f(extra=0):\n    return 2 + extra\n"})
     assert _measure(repo, run, fix)["uncovered"] == ["f"]
+
+
+def test_us33_subtract_record_has_the_declared_shape():
+    assert er.subtract_record("abc", ["t.py"], ["t.py::a"]) == {
+        "kind": "subtract",
+        "sha": "abc",
+        "tests_touched": ["t.py"],
+        "suite_failed": ["t.py::a"],
+    }
+
+
+def test_us33_complete_true_for_clean_subtract_record():
+    assert er.complete(er.subtract_record("abc", [], [])) is True
+
+
+def test_us33_complete_false_for_subtract_record_with_touched_tests():
+    assert er.complete(er.subtract_record("abc", ["tests/t.py"], [])) is False
+
+
+def test_us33_complete_false_for_subtract_record_with_failed_tests():
+    assert er.complete(er.subtract_record("abc", [], ["tests/t.py::test_a"])) is False
+
+
+def test_us33_complete_false_for_subtract_record_without_sha():
+    assert er.complete(er.subtract_record("", [], [])) is False
