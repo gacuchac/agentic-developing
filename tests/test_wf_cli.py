@@ -128,7 +128,12 @@ def test_us11_record_wrong_step_refused_state_unchanged(env, tmp_path):
 
 def test_us11_report_prints_headings(env):
     run = _started(env)
-    (run / "decisions.tsv").write_text("")
+    (run / "decisions.tsv").write_text(
+        "ts\tphase\tdecision\twhy\tevidence\tresult\nt1\tu1 tests_decide\twrong\tquoteXYZ = 1\tT1\tverify\n"
+    )
     r = wf("report", run)
     assert r.returncode == 0, r.stderr
-    assert "#" in r.stdout
+    for heading in ("## Decisions", "## Dismissals", "## Commits", "## Ratchet candidates"):
+        assert heading in r.stdout
+    dis = r.stdout.split("## Dismissals")[1].split("## ")[0]
+    assert "quoteXYZ = 1" in dis
