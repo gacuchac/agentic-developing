@@ -291,3 +291,14 @@ def test_us21_nested_agent_without_transcript_or_run_line_records_nothing(hook, 
     transcript.unlink()
     assert hook.main(_nested_event(transcript), active, rec) == 0
     assert len(rec.calls) == 1
+
+
+def test_us21_engine_python_is_the_workspace_venv_interpreter_when_present(hook, tmp_path):
+    interpreter = tmp_path / ".venv" / "bin" / "python"
+    interpreter.parent.mkdir(parents=True)
+    interpreter.write_text("")
+    assert hook.engine_python(tmp_path) == str(interpreter)
+
+
+def test_us21_engine_python_falls_back_to_python3_without_a_venv(hook, tmp_path):
+    assert hook.engine_python(tmp_path) == "python3"
