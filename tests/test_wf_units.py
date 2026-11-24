@@ -233,3 +233,29 @@ def test_us7_declared_breaks_lists_each_id_stripped():
 
 def test_us7_declared_breaks_empty_without_line():
     assert units.declared_breaks("### 1. x (US-7)\nLane: fast\n") == []
+
+
+def test_us24_unit_files_and_estimate_from_one_line():
+    md = "### 1. T (US-24)\nLane: fast\nEstimate: ~14 lines. Files: `a/b.py`, `tests/test_b.py`.\n"
+    assert units.unit_files(md) == ["a/b.py", "tests/test_b.py"]
+    assert units.unit_estimate(md) == 14
+
+
+def test_us24_unit_files_ignores_notes_outside_backticks():
+    md = "### 1. T (US-24)\n- Files: `scheduler/store.py` (new), `tests/test_store.py` (new).\n"
+    assert units.unit_files(md) == ["scheduler/store.py", "tests/test_store.py"]
+
+
+def test_us24_unit_without_lines_gives_empty_and_none():
+    md = "### 1. T (US-24)\nLane: fast\nDone when: ok\n"
+    assert units.unit_files(md) == []
+    assert units.unit_estimate(md) is None
+
+
+def test_us24_estimate_without_number_is_none():
+    md = "### 1. T (US-24)\nEstimate: documents only.\n"
+    assert units.unit_estimate(md) is None
+
+
+def test_us24_estimate_without_tilde():
+    assert units.unit_estimate("### 1. T\nEstimate: 7 lines.\n") == 7
