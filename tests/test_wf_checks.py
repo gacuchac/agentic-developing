@@ -107,3 +107,53 @@ def test_us10_tests_touched_ignores_non_test_changes(tmp_path):
 def test_us10_tests_touched_empty_on_clean_tree(tmp_path):
     repo = _tmp_repo(tmp_path)
     assert checks.tests_touched(repo) == []
+
+
+def _git(repo, *args):
+    import subprocess
+
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+
+
+def _cap_repo(tmp_path):
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "t@t")
+    _git(tmp_path, "config", "user.name", "t")
+    (tmp_path / "base.py").write_text("x = 0\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    return tmp_path
+
+
+def _lines(n):
+    return "".join(f"v{i} = {i}\n" for i in range(n))
+
+
+def test_us18_over_cap_names_file_and_count_for_31_new_lines(tmp_path):
+    repo = _cap_repo(tmp_path)
+    (repo / "big.py").write_text(_lines(31))
+    text = checks.over_cap(repo)
+    assert text.startswith("Commit blocked: 31 changed lines, limit 30.")
+    assert "big.py" in text
+
+
+def test_us18_over_cap_none_for_30_new_lines(tmp_path):
+    repo = _cap_repo(tmp_path)
+    (repo / "ok.py").write_text(_lines(30))
+    assert checks.over_cap(repo) is None
+
+
+def test_us18_over_cap_none_for_long_test_and_doc_files(tmp_path):
+    repo = _cap_repo(tmp_path)
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_long.py").write_text(_lines(80))
+    (repo / "notes.md").write_text(_lines(80))
+    assert checks.over_cap(repo) is None
+
+
+def test_us18_over_cap_counts_tracked_file_changes(tmp_path):
+    repo = _cap_repo(tmp_path)
+    (repo / "base.py").write_text(_lines(31))
+    text = checks.over_cap(repo)
+    assert text.startswith("Commit blocked: 31 changed lines, limit 30.")
+    assert "base.py" in text
