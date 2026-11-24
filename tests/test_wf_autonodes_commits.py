@@ -75,7 +75,7 @@ def test_us10_commit_tests_commits_only_touched_paths(tmp_path):
     assert list(paths) == ["tests/a.py", "tests/b.py"]
     assert entry == {"sha": SHA, "message": "test(US-9): Do the thing"}
     assert new["head"] == SHA
-    assert calls["log"] and calls["log"][0][0] == tmp_path
+    assert calls["log"] == []
 
 
 def test_us10_commit_tests_starts_one_review_and_stores_handle(tmp_path):
@@ -110,7 +110,7 @@ def test_us10_commit_fix_commits_everything_and_writes_evidence(tmp_path):
     assert entry["sha"] == SHA
     assert entry["message"] == "US-9: Do the thing"
     assert Path(entry["evidence"]) == ev_path
-    assert len(calls["log"]) == 1
+    assert calls["log"] == []
 
 
 def test_us10_commit_subtract_message_uses_stories_and_summary(tmp_path):
@@ -124,7 +124,7 @@ def test_us10_commit_subtract_message_uses_stories_and_summary(tmp_path):
     assert entry["sha"] == SHA and entry["message"] == message
     assert (tmp_path / f"evidence-{SHA}.json").exists()
     assert new["head"] == SHA
-    assert len(calls["log"]) == 1
+    assert calls["log"] == []
 
 
 @pytest.mark.parametrize("node", ["commit_tests", "commit_fix", "commit_subtract"])
@@ -159,7 +159,7 @@ def test_us10_commit_fix_resumes_a_commit_a_dead_run_already_made(tmp_path):
     assert new["head"] == "deadbeef"
     assert calls["evidence"] == [(ctx.repo, tmp_path, "deadbeef", ctx.python, "t111111")]
     assert (tmp_path / "evidence-deadbeef.json").exists()
-    assert len(calls["log"]) == 1
+    assert calls["log"] == []
 
 
 def test_us10_commit_fix_resumes_on_a_real_repo_whose_head_is_the_unit_commit(tmp_path):

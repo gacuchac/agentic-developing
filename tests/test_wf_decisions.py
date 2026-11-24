@@ -79,3 +79,51 @@ def test_us9_correct_entry_with_bare_id_findings_shows_the_id_as_evidence():
     }
     cells = decisions.row(entry)
     assert "T1" in cells[4]
+
+
+def _decision(decision, evidence, node="tests_decide"):
+    return {"unit": "3", "node": node, "decision": decision, "evidence": evidence, "to": "verify", "t": "2026-11-23T10:00:00"}
+
+
+def test_us18_correct_entry_why_holds_each_finding_as_id_and_reason():
+    ev = {"findings": [{"id": "I1", "reason": "alias differs from the plan"}]}
+    cells = decisions.row(_decision("overstated", ev))
+    assert cells == [
+        "2026-11-23T10:00:00",
+        "u3 tests_decide",
+        "overstated",
+        "I1: alias differs from the plan",
+        "I1",
+        "verify",
+    ]
+
+
+def test_us18_why_joins_several_finding_reasons_with_semicolons():
+    ev = {"findings": [{"id": "I1", "reason": "first"}, {"id": "I2", "reason": "second"}]}
+    cells = decisions.row(_decision("overstated", ev))
+    assert cells[3] == "I1: first; I2: second"
+
+
+def test_us18_tests_wrong_entry_why_holds_its_quote():
+    ev = {"test": "tests/test_a.py::test_x", "quote": "the alias is kept"}
+    cells = decisions.row(_decision("tests_wrong", ev, node="fail_decide"))
+    assert cells == [
+        "2026-11-23T10:00:00",
+        "u3 fail_decide",
+        "tests_wrong",
+        "the alias is kept",
+        "",
+        "verify",
+    ]
+
+
+def test_us18_escalate_entry_why_holds_its_question():
+    cells = decisions.row(_decision("escalate", {"question": "Which alias does the plan want?"}, node="fail_decide"))
+    assert cells == [
+        "2026-11-23T10:00:00",
+        "u3 fail_decide",
+        "escalate",
+        "Which alias does the plan want?",
+        "",
+        "verify",
+    ]
