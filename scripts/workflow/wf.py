@@ -153,6 +153,7 @@ def default_ctx(run: Path, checkout: Path | None = None) -> Ctx:
         run_review=reviews.run_pass,
         tests=checks.run_pytest,
         touched=checks.tests_touched,
+        size=checks.change_size,
         fix_imports=checks.fix_imports,
         source=reviews.review_source,
         commit=gitops.commit,

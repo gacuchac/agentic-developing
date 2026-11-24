@@ -37,6 +37,7 @@ class Ctx:
     log: Callable[[Path, list[str]], None]
     now: Callable[[], str]
     fix_imports: Callable[[Path, list[str]], None] = _no_fix
+    size: Callable[[Path], dict[str, int]] = lambda _repo: {}
 
 
 Handler = Callable[[dict, Ctx], tuple[str, dict, dict]]
@@ -94,18 +95,26 @@ def _red_run(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
 
 
 def _verify(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
-    """Give `tests_touched`, `fail` (stray failure, failing added test or dispute), or the unit's lane."""
+    """Give `tests_touched`, `fail` (stray failure, failing added test or dispute), or the unit's lane.
+
+    A fast unit whose change leaves its files or is oversized gives `full`; entry["reasons"] says why.
+    """
     unit = (ctx.run / "unit.md").read_text()
     touched = ctx.touched(ctx.repo)
     disputed = _result(state, "implement").get("tests_disputed", [])
-    entry = {"failed": [], "disputed": disputed, "touched": touched}
+    entry = {"failed": [], "disputed": disputed, "touched": touched, "reasons": []}
     if touched:
         return "tests_touched", entry, state
     entry["failed"] = ctx.tests(ctx.repo, [])["failed"]
     added = _result(state, "qa_write")["tests_added"]
     stray = [f for f in entry["failed"] if f not in units.declared_breaks(unit)]
     hit = [f for f in entry["failed"] if f in added or f.split("::")[0] in added]
-    return ("fail" if stray or hit or disputed else units.unit_lane(unit)), entry, state
+    if stray or hit or disputed:
+        return "fail", entry, state
+    lane = units.unit_lane(unit)
+    if lane == "fast":
+        entry["reasons"] = units.scope_reasons(unit, ctx.size(ctx.repo))
+    return ("full" if entry["reasons"] else lane), entry, state
 
 
 def _made_already(state: dict, ctx: Ctx, message: str) -> str | None:
