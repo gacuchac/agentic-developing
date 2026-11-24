@@ -214,3 +214,22 @@ def test_us10_commit_message_story_list_is_valid_subject():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     assert mod.valid_subject(units.commit_message("### 3. Do the thing (US-9, US-10)"))
+
+
+def test_us7_lane_fast_is_read_from_the_unit():
+    assert units.unit_lane("### 1. x (US-7)\nLane: fast\nEstimate: ~3 lines.\n") == "fast"
+
+
+def test_us7_lane_full_when_missing_or_unknown():
+    assert units.unit_lane("### 1. x (US-7)\nEstimate: ~3 lines.\n") == "full"
+    assert units.unit_lane("### 1. x (US-7)\nLane: banana\n") == "full"
+    assert units.unit_lane("### 1. x (US-7)\nLane: full\n") == "full"
+
+
+def test_us7_declared_breaks_lists_each_id_stripped():
+    md = "### 1. x (US-7)\nLane: full\nBreaks: tests/test_a.py::t1, tests/test_b.py\n"
+    assert units.declared_breaks(md) == ["tests/test_a.py::t1", "tests/test_b.py"]
+
+
+def test_us7_declared_breaks_empty_without_line():
+    assert units.declared_breaks("### 1. x (US-7)\nLane: fast\n") == []
