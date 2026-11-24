@@ -167,3 +167,12 @@ def test_us19_start_on_worktree_records_checkout_mode_and_branch(env):
     assert state["mode"] == "parallel"
     assert state["branch"] == "feature/wt"
 
+
+def test_us19_start_without_checkout_stores_repo_and_sequential_mode(env):
+    run, repo = env
+    r = wf("start", run, "--plan", "plan.md")
+    assert r.returncode == 0, r.stderr
+    state = json.loads((run / "state.json").read_text())
+    assert state["checkout"] == str(repo.resolve())
+    assert state["mode"] == "sequential"
+
