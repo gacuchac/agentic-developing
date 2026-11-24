@@ -1,6 +1,18 @@
 """Plain-text views of a task's state and of its decision log."""
 
 from collections import Counter
+from pathlib import Path
+
+_EVIDENCE = {
+    "correct": ["findings"],
+    "overstated": ["findings"],
+    "wrong": ["findings"],
+    "code_wrong": ["tests"],
+    "tests_wrong": ["test", "quote"],
+    "escalate": ["question"],
+    "architecture_stop": ["path"],
+    "user_continue": ["user_said", "to"],
+}
 
 
 def status_text(state: dict, last: int = 5) -> str:
@@ -27,3 +39,9 @@ def report_text(log: str) -> str:
     out = [f"## {title}\n" + "\n".join(" | ".join(r) for r in rs) for title, rs in sections.items()]
     out.append("## Ratchet candidates\n" + "\n".join(i for i, n in ids.items() if n >= 2))
     return "\n".join(out)
+
+
+def repo_for(run: Path) -> Path:
+    """Return the repo of a run folder: the workspace itself, or its project folder."""
+    workspace = run.parents[3]
+    return workspace if run.parent.name == workspace.name else workspace / run.parent.name
