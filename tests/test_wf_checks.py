@@ -203,3 +203,12 @@ def test_us18_added_tests_lists_untracked_and_added_tests_and_stages_nothing(tmp
     ]
     staged = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=tmp_path, capture_output=True, text=True, check=True)
     assert staged.stdout == ""
+
+
+def test_us18_failed_ids_keeps_whole_id_up_to_the_message():
+    output = (
+        "FAILED tests/t.py::test_x[   ] - AssertionError: boom\n"
+        "ERROR tests/t.py - ModuleNotFoundError: x\n"
+        "FAILED tests/t.py::test_y\n"
+    )
+    assert checks.failed_ids(output) == ["tests/t.py::test_x[   ]", "tests/t.py", "tests/t.py::test_y"]

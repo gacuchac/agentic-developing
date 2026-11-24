@@ -303,3 +303,12 @@ def test_us25_red_run_entry_and_red_json_hold_qa_left_out(tmp_path):
     _, entry, _ = autonodes.HANDLERS["red_run"](make_state(left_out=left), ctx)
     assert entry == {"tests": ADDED, "failed": ADDED, "claimed": {"failed": ADDED, "reason_expected": True}, "not_red": [], "left_out": left}
     assert json.loads((tmp_path / "red.json").read_text()) == entry
+
+
+def test_us18_red_run_counts_a_parametrized_test_by_its_failing_cases(tmp_path):
+    added = ["tests/t.py::test_p"]
+    cases = ["tests/t.py::test_p[0]", "tests/t.py::test_p[-5]"]
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": cases}, added=lambda repo: added)
+    outcome, entry, _ = autonodes.HANDLERS["red_run"](make_state(added=added), ctx)
+    assert outcome == "expected"
+    assert entry == {"tests": added, "failed": cases, "claimed": {"failed": added, "reason_expected": True}, "not_red": [], "left_out": []}
