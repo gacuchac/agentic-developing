@@ -8,6 +8,7 @@ import json
 import sys
 import time
 from collections import Counter
+from functools import partial
 from pathlib import Path
 
 import agent_steps
@@ -125,7 +126,7 @@ def default_ctx(run: Path) -> Ctx:
         repo=repo,
         python=venv if venv.exists() else Path(sys.executable),
         start_review=reviews.start_pass,
-        collect_review=reviews.collect_pass,
+        collect_review=partial(reviews.collect_pass, timeout=1800),
         run_review=reviews.run_pass,
         tests=checks.run_pytest,
         touched=checks.tests_touched,
