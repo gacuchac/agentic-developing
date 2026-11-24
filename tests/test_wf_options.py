@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "workflow"))
 
 import graph  # noqa: E402
@@ -18,9 +20,15 @@ def _tree(tmp_path, project):
     return ws, run
 
 
-def _ctx(ws, run):
+def _ctx(ws, run, python=Path("/engine/venv/bin/python")):
     return SimpleNamespace(
-        run=run, repo=ws, now=lambda: "t", diff=lambda r: "", file_at=lambda repo, path, sha: "x", log=lambda r, c: None
+        run=run,
+        repo=ws,
+        python=python,
+        now=lambda: "t",
+        diff=lambda r: "",
+        file_at=lambda repo, path, sha: "x",
+        log=lambda r, c: None,
     )
 
 
@@ -255,3 +263,52 @@ def test_us17_first_implement_prompt_has_no_section_but_one_after_a_decision(tmp
     fixed = wf.options_view(_fix_state([decision], "implementer", "code"), _ctx(ws, run))[0]["prompt"]
     assert _fix_section(plain) == []
     assert "Failing tests: t::a" in _fix_section(fixed)
+
+
+PROMPT_TEMPLATES = ["qa-write.md", "qa-fix.md", "implementer-code.md", "implementer-subtract.md"]
+
+
+def _lines_after_run_folder(prompt):
+    lines = prompt.splitlines()
+    i = next(n for n, line in enumerate(lines) if line.startswith("Run folder:"))
+    return lines[i + 1 : i + 3]
+
+
+def test_us17_qa_write_prompt_names_plan_and_python_after_run_folder(tmp_path):
+    ws, run = _tree(tmp_path, "Developing")
+    (run / "unit.md").write_text("do the unit")
+    s = _agent_state()
+    s["plan"] = "myplan.md"
+    py = Path("/some/engine/python")
+    prompt = wf.options_view(s, _ctx(ws, run, py))[0]["prompt"]
+    assert _lines_after_run_folder(prompt) == [f"Plan: {run / 'myplan.md'}", f"Python: {py}"]
+
+
+def test_us17_implementer_prompt_names_plan_and_python_after_run_folder(tmp_path):
+    ws, run = _tree(tmp_path, "Developing")
+    (run / "unit.md").write_text("do the unit")
+    s = _agent_state()
+    s["pending"] = {"kind": "agent", "agent": "implementer", "step": "code", "step_id": "u1-code-1"}
+    py = Path("/another/python")
+    prompt = wf.options_view(s, _ctx(ws, run, py))[0]["prompt"]
+    assert _lines_after_run_folder(prompt) == [f"Plan: {run / 'plan.md'}", f"Python: {py}"]
+
+
+def test_us17_template_prompt_gets_plan_and_python_after_run_folder(tmp_path):
+    ws, run = _tree(tmp_path, "Developing")
+    (run / "unit.md").write_text("do the unit")
+    prompts = ws / ".claude" / "workflow" / "prompts"
+    prompts.mkdir(parents=True)
+    (prompts / "qa-write.md").write_text("wf-step: {step_id}\nRun folder: {run}\nAgent: qa\n")
+    py = Path("/tpl/python")
+    prompt = wf.options_view(_agent_state(), _ctx(ws, run, py))[0]["prompt"]
+    assert _lines_after_run_folder(prompt) == [f"Plan: {run / 'plan.md'}", f"Python: {py}"]
+
+
+@pytest.mark.parametrize("name", PROMPT_TEMPLATES)
+def test_us17_template_names_python_line_and_plan_approach(name):
+    text = (Path(__file__).resolve().parent.parent / ".claude" / "workflow" / "prompts" / name).read_text()
+    assert "`Python:` line" in text
+    assert "-m pytest -q" in text
+    assert "Approach" in text
+    assert "Contracts" in text
