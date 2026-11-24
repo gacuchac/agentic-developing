@@ -47,3 +47,11 @@ def launch_info(repo: Path) -> tuple[str, str]:
     if branch == "HEAD":
         raise RuntimeError("HEAD is detached")
     return branch, launch
+
+
+def current_branch(repo: Path) -> str | None:
+    """Return the checked-out branch name of repo ("HEAD" when detached); None when repo is not a git repository."""
+    try:
+        return _git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip()
+    except subprocess.CalledProcessError:
+        return None

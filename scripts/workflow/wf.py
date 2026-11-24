@@ -235,10 +235,22 @@ def _holder_line(run: Path) -> str:
     return f"held by: {holder['session']} on {holder['branch']} since {holder['since']}" if holder else "held by: -"
 
 
+def root_warning(root_branch: str, task_is_root: bool) -> str | None:
+    """Return a one-line warning when a project task sees the workspace root off dev; None otherwise."""
+    if task_is_root or root_branch == "dev":
+        return None
+    return f"warning: the workspace root is on '{root_branch}', not dev; switch the root back to dev"
+
+
 def _show(args: argparse.Namespace, ctx: Ctx) -> None:
     if args.cmd == "status":
         print(status_text(st.load(args.run)))
         print(_holder_line(args.run))
+        workspace = args.run.parents[3]
+        branch = gitops.current_branch(workspace)
+        warning = None if branch is None else root_warning(branch, repo_for(args.run) == workspace)
+        if warning:
+            print(warning)
     elif args.cmd == "options":
         print(json.dumps(options_view(st.load(args.run), ctx), indent=2))
     else:
