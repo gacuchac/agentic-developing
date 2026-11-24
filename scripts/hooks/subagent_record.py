@@ -35,15 +35,20 @@ def step_id_of(prompt_text: str) -> str | None:
     return match.group(1) if match else None
 
 
+def engine_python(workspace: Path) -> str:
+    """Return `<workspace>/.venv/bin/python` when that file exists, else "python3"."""
+    venv = workspace / ".venv" / "bin" / "python"
+    return str(venv) if venv.exists() else "python3"
+
+
 def real_record(run: Path, step_id: str, result: dict) -> list[str]:
     """Run `wf record <run> <step_id>` with `result`; return the refusal lines, empty when accepted."""
     with tempfile.NamedTemporaryFile("w", suffix=".json") as handle:
         json.dump(result, handle)
         handle.flush()
         wf = WORKSPACE / "scripts" / "workflow" / "wf.py"
-        done = subprocess.run(
-            ["python3", str(wf), "record", str(run), step_id, handle.name], capture_output=True, text=True
-        )
+        command = [engine_python(WORKSPACE), str(wf), "record", str(run), step_id, handle.name]
+        done = subprocess.run(command, capture_output=True, text=True)
     return done.stderr.splitlines() if done.returncode else []
 
 
