@@ -249,3 +249,31 @@ def test_us9_measure_collection_error_at_test_commit_counts_as_red(tmp_path):
     assert rec["added"] == ["tests/test_c.py::test_c"]
     assert rec["red"] == rec["added"]
     assert er.complete(rec) is True
+
+
+def _split_fix(tmp_path: Path):
+    repo, run, tests_sha = _repo(tmp_path)
+    _commit(repo, "US-1: part 1", {"src/helper.py": "def h():\n    return 0\n"})
+    part2 = _commit(repo, "US-1: part 2", {"src/a.py": "def f():\n    return 2\n"})
+    return repo, run, tests_sha, part2
+
+
+def test_us9_measure_explicit_tests_commit_spans_a_fix_split_over_commits(tmp_path):
+    repo, run, tests_sha, part2 = _split_fix(tmp_path)
+    assert er.measure(repo, run, part2, Path(sys.executable))["tests_commit"] is None
+    rec = er.measure(repo, run, part2, Path(sys.executable), tests_commit=tests_sha)
+    assert rec["tests_commit"] == tests_sha
+    assert rec["added"] == ["tests/test_b.py::test_b"]
+    assert rec["red"] == rec["added"]
+    assert rec["green"] == rec["added"]
+    assert er.complete(rec) is True
+
+
+def test_us9_cli_write_accepts_short_tests_commit(tmp_path):
+    repo, run, tests_sha, part2 = _split_fix(tmp_path)
+    cmd = [sys.executable, str(_SCRIPT), "write", "--run", str(run), "--sha", part2]
+    cmd += ["--tests-commit", tests_sha[:8], "--python", sys.executable]
+    proc = subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    saved = json.loads((run / f"evidence-{part2}.json").read_text())
+    assert saved["added"] == ["tests/test_b.py::test_b"]
