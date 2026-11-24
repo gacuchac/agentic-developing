@@ -1,4 +1,4 @@
-"""Plain-text views of a task's state and of its decision log."""
+"""The workflow engine's command line (`wf start`, `status`, `take`, `record`, ...) and its plain-text views."""
 
 from __future__ import annotations
 
