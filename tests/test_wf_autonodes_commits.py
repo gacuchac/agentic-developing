@@ -127,3 +127,11 @@ def test_us10_commit_hook_refusal_gives_refused_with_error(tmp_path, node):
     assert "sha" not in entry
     assert new == before
     assert calls["log"] == []
+
+
+def test_us10_commit_tests_review_args_name_the_new_commit(tmp_path):
+    ctx, state, calls = _make(tmp_path)
+    autonodes.HANDLERS["commit_tests"](state, ctx)
+    args = calls["start_review"][0][0]
+    assert args[0] == "tests"
+    assert args[args.index("--commit") + 1] == SHA
