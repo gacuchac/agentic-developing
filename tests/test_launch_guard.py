@@ -109,3 +109,68 @@ def test_us14_main_allows_unreadable_input(tmp_path):
 def test_us14_main_allows_when_state_unreadable(tmp_path):
     active = _setup(tmp_path, state=None)
     assert guard.main(json.dumps(_agent("qa", None)), active) == 0
+
+
+def _prompt(step_id: str | None, agent: str = "qa", run: str | None = None) -> str:
+    lines = ([f"wf-step: {step_id}"] if step_id else []) + ([f"Run folder: {run}"] if run else [])
+    return "\n".join([*lines, f"Agent: {agent}", "Do the work.", ""])
+
+
+def _launch(agent: str, prompt: str) -> str:
+    return json.dumps({"session_id": "s1", "tool_name": "Agent",
+                       "tool_input": {"subagent_type": agent, "prompt": prompt, "description": "d"}})
+
+
+def _multi(tmp_path: Path, pendings: list[dict]) -> tuple[Path, list[str]]:
+    active = tmp_path / "active"
+    active.mkdir()
+    runs = []
+    for i, pending in enumerate(pendings):
+        run = tmp_path / f"run{i}"
+        run.mkdir()
+        (run / "state.json").write_text(json.dumps({"task": f"t{i}", "pending": pending}))
+        (active / f"proj--t{i}.json").write_text(json.dumps({**CLAIM, "run": str(run)}))
+        runs.append(str(run))
+    return active, runs
+
+
+QA_A = {"kind": "agent", "agent": "qa", "step": "write", "step_id": "a-write-1"}
+QA_B = {"kind": "agent", "agent": "qa", "step": "write", "step_id": "b-write-1"}
+IMPL = {"kind": "agent", "agent": "implementer", "step": "impl", "step_id": "a-impl-1"}
+AUTO = {"kind": "auto"}
+
+
+def test_us21_run_of_returns_path_on_run_folder_line():
+    assert guard.run_of("wf-step: x\nRun folder: /a/b/c\nAgent: qa\n") == "/a/b/c"
+
+
+def test_us21_run_of_is_none_without_run_folder_line():
+    assert guard.run_of("wf-step: x\nAgent: qa\n") is None
+
+
+def test_us21_allows_second_tasks_pending_step_by_its_run(tmp_path):
+    active, runs = _multi(tmp_path, [QA_A, QA_B])
+    assert guard.main(_launch("qa", _prompt("b-write-1", run=runs[1])), active) == 0
+
+
+def test_us21_denies_first_tasks_step_id_against_second_run(tmp_path, capsys):
+    active, runs = _multi(tmp_path, [QA_A, QA_B])
+    assert guard.main(_launch("qa", _prompt("a-write-1", run=runs[1])), active) == 2
+    assert "b-write-1" in capsys.readouterr().err
+
+
+def test_us21_denies_launch_without_run_folder_when_a_task_waits_for_agent(tmp_path, capsys):
+    active, _ = _multi(tmp_path, [AUTO, QA_B])
+    assert guard.main(_launch("qa", _prompt("b-write-1")), active) == 2
+    assert "b-write-1" in capsys.readouterr().err
+
+
+def test_us21_allows_launch_without_run_folder_when_no_task_waits_for_agent(tmp_path):
+    active, _ = _multi(tmp_path, [IMPL, AUTO])
+    assert guard.main(_launch("qa", _prompt(None)), active) == 0
+
+
+def test_us21_allows_prompt_naming_a_run_the_session_does_not_hold(tmp_path):
+    active, _ = _multi(tmp_path, [QA_A])
+    other = str(tmp_path / "elsewhere")
+    assert guard.main(_launch("qa", _prompt("zzz-1", run=other)), active) == 0
