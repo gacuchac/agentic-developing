@@ -288,3 +288,19 @@ def test_us9_measure_follow_up_test_commit_edits_are_not_tampering(tmp_path):
     assert rec["added"] == ["tests/test_b.py::test_b"]
     assert rec["tests_touched"] == []
     assert er.complete(rec) is True
+
+
+def test_us9_measure_without_architecture_file_gives_a_complete_record(tmp_path):
+    repo, run, _ = _repo(tmp_path)
+    (run / "architecture.md").unlink()
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f():\n    return 2\n"})
+    rec = _measure(repo, run, fix)
+    assert rec["uncovered"] == []
+    assert er.complete(rec) is True
+
+
+def test_us9_measure_without_architecture_file_reports_a_changed_signature(tmp_path):
+    repo, run, _ = _repo(tmp_path)
+    (run / "architecture.md").unlink()
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f(extra=0):\n    return 2 + extra\n"})
+    assert _measure(repo, run, fix)["uncovered"] == ["f"]
