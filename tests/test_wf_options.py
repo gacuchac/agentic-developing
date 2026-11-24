@@ -312,3 +312,8 @@ def test_us17_template_names_python_line_and_plan_approach(name):
     assert "-m pytest -q" in text
     assert "Approach" in text
     assert "Contracts" in text
+
+
+def test_us17_implementer_template_states_the_disputed_entry_format():
+    text = (Path(__file__).resolve().parent.parent / ".claude/workflow/prompts/implementer-code.md").read_text()
+    assert "<test id>: <the plan line it contradicts>" in text

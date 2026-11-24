@@ -161,3 +161,30 @@ def test_us9_log_is_called_once_per_accepted_decision_and_never_for_a_refused_on
     engine.take(s, "correct", {"findings": ["T2"]}, ctx, {})
     assert len(logged) == 1
     assert logged[0][0] == tmp_path
+
+
+def _disputed_state(tmp_path, disputed):
+    (tmp_path / "plan.md").write_text("a before b\nsecond line\n")
+    s = _state("fail_decide")
+    entry = {"node": "verify", "outcome": "fail", "failed": [], "disputed": disputed, "touched": []}
+    return st.with_entry(s, entry, "n")
+
+
+def test_us17_tests_wrong_names_a_disputed_test_by_its_id(tmp_path):
+    s = _disputed_state(tmp_path, ["tests/t.py::test_x: plan line 'a before b'"])
+    ev = {"test": "tests/t.py::test_x", "quote": "a before b"}
+    out, errors = engine.take(s, "tests_wrong", ev, _ctx(tmp_path, []), {})
+    assert errors == []
+    assert out["history"][-1]["decision"] == "tests_wrong"
+    assert out["node"] == "qa_fix"
+
+
+def test_us17_disputed_entry_without_colon_space_is_accepted_as_written_and_others_by_id(tmp_path):
+    bare = "tests/t.py::test_bare"
+    s = _disputed_state(tmp_path, [bare, "tests/t.py::test_y: contradicts 'second line'"])
+    ctx = _ctx(tmp_path, [])
+    _, errors = engine.take(s, "tests_wrong", {"test": bare, "quote": "a before b"}, ctx, {})
+    assert errors == []
+    _, errors = engine.take(s, "tests_wrong", {"test": "tests/t.py::test_y", "quote": "second line"}, ctx, {})
+    assert errors == []
+
