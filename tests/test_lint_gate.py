@@ -171,3 +171,23 @@ def test_x8_staged_suffixless_binary_does_not_crash(tmp_path, monkeypatch):
     (repo / "blob").write_bytes(b"\xff\xfe\x00\x80\x81binary")
     subprocess.run(["git", "-C", str(repo), "add", "blob"], check=True)
     assert _gate(repo, monkeypatch) == 0
+
+
+def _raiser(error: Exception):
+    def check(source: str, path: Path):
+        raise error
+
+    return check
+
+
+def test_us29_slop_failed_skips_a_source_with_a_tokenize_error(monkeypatch):
+    import tokenize
+
+    error = tokenize.TokenError("source code cannot contain null bytes", (1, 0))
+    monkeypatch.setattr(gate, "check_source", _raiser(error))
+    assert gate.slop_failed({"blob.py": "x"}) is False
+
+
+def test_us29_slop_failed_skips_a_source_with_a_syntax_error(monkeypatch):
+    monkeypatch.setattr(gate, "check_source", _raiser(SyntaxError("bad")))
+    assert gate.slop_failed({"blob.py": "x"}) is False
