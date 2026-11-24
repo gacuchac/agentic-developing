@@ -9,6 +9,7 @@ from pathlib import Path
 
 import graph
 import review
+import state as st
 import units
 
 
@@ -26,7 +27,7 @@ class Ctx:
     touched: Callable[[Path], list[str]]
     source: Callable[[Path, str | None, str | None], str]
     commit: Callable[[Path, str, list[str] | None], str]
-    evidence: Callable[[Path, Path, str, Path], dict]
+    evidence: Callable[[Path, Path, str, Path, str | None], dict]
     diff: Callable[[Path], str]
     file_at: Callable[[Path, str, str | None], str | None]
     log: Callable[[Path, list[str]], None]
@@ -138,18 +139,20 @@ def _commit_tests(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     return outcome, entry, new
 
 
-def _commit_all(state: dict, ctx: Ctx, message: str) -> tuple[str, dict, dict]:
+def _commit_all(state: dict, ctx: Ctx, message: str, tests_commit: str | None) -> tuple[str, dict, dict]:
     outcome, entry, new = _commit(state, ctx, message, None)
     if outcome == "done":
         path = ctx.run / f"evidence-{entry['sha']}.json"
-        path.write_text(json.dumps(ctx.evidence(ctx.repo, ctx.run, entry["sha"], ctx.python)))
+        path.write_text(json.dumps(ctx.evidence(ctx.repo, ctx.run, entry["sha"], ctx.python, tests_commit)))
         entry = {**entry, "evidence": str(path)}
     return outcome, entry, new
 
 
 def _commit_fix(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     """Commit everything with the unit's message and record its evidence; `refused` with the error if a hook fails."""
-    return _commit_all(state, ctx, units.commit_message((ctx.run / "unit.md").read_text()))
+    done = (e for e in st.unit_history(state) if e.get("node") == "commit_tests" and e.get("outcome") == "done")
+    first = next((e["sha"] for e in done), None)
+    return _commit_all(state, ctx, units.commit_message((ctx.run / "unit.md").read_text()), first)
 
 
 def _subtract_check(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
@@ -170,7 +173,7 @@ def _full_suite(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
 def _commit_subtract(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     """Commit everything as `<stories>: Subtract: <summary>` and record evidence; `refused` if a hook fails."""
     stories = units.commit_message((ctx.run / "unit.md").read_text()).split(": ", 1)[0]
-    return _commit_all(state, ctx, f"{stories}: Subtract: {_result(state, 'subtract')['removed']}")
+    return _commit_all(state, ctx, f"{stories}: Subtract: {_result(state, 'subtract')['removed']}", None)
 
 
 def _scope(state: dict) -> tuple[str | None, str | None]:
