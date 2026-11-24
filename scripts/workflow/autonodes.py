@@ -48,7 +48,7 @@ def _fix(state: dict, ctx: Ctx) -> tuple[str, list[str]]:
     decision = [e for e in state["history"] if "decision" in e][-1]["evidence"]
     if "tests" in decision:
         return "full-suite " + " ".join(decision["tests"]), decision["tests"]
-    ids = decision["findings"]
+    ids = [f["id"] if isinstance(f, dict) else f for f in decision["findings"]]
     reviews = [r for e in state["history"] if "reviews" in e for r in e["reviews"]]
     hit = [r for r in reviews if set(r["fails"]) & set(ids)]
     text = "\n".join((ctx.run / r["review"]).read_text() for r in hit)
