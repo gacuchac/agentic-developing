@@ -146,3 +146,32 @@ def test_us14_main_refusal_returns_2_with_errors_on_stderr(hook, tmp_path, capsy
     err = capsys.readouterr().err
     assert "red_run.failed is empty" in err and "tests_added missing" in err
     assert len(rec.calls) == 1
+
+
+def _handback_event(message: str, hook_event: str = "PostToolUse", agent_type: str = "qa", last: str = "") -> str:
+    return json.dumps({"session_id": "s1", "agent_id": "a1", "agent_type": agent_type,
+                       "hook_event_name": hook_event, "tool_name": "SubagentHandback",
+                       "tool_input": {"message": message}, "last_assistant_message": last})
+
+
+@pytest.mark.parametrize("hook_event", ["PreToolUse", "PostToolUse"])
+def test_us14_main_records_result_from_subagent_handback_message(hook, tmp_path, hook_event):
+    active, run = _setup(tmp_path)
+    rec = Recorder()
+    assert hook.main(_handback_event("report\n" + _block(json.dumps(RESULT)), hook_event), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", RESULT)]
+
+
+def test_us14_main_handback_refusal_returns_2(hook, tmp_path, capsys):
+    active, _ = _setup(tmp_path)
+    rec = Recorder(["tests_added missing"])
+    assert hook.main(_handback_event(_block(json.dumps(RESULT))), active, rec) == 2
+    assert "tests_added missing" in capsys.readouterr().err
+
+
+def test_us14_main_handback_message_wins_when_last_message_empty_of_block(hook, tmp_path):
+    active, run = _setup(tmp_path)
+    rec = Recorder()
+    event = _handback_event(_block('{"a": 1}'), last="thanks, done")
+    assert hook.main(event, active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", {"a": 1})]
