@@ -22,6 +22,12 @@ def _step_id(prompt: str) -> str | None:
     return match.group(1) if match else None
 
 
+def run_of(prompt: str) -> str | None:
+    """Return the path on the `Run folder:` line of `prompt`, or None."""
+    match = re.search(r"^Run folder:\s*(\S+)", prompt, re.MULTILINE)
+    return match.group(1) if match else None
+
+
 def _decide_agent(tool_input: dict, state: dict | None) -> tuple[bool, str]:
     """Decide an Agent launch against the pending step in `state`."""
     agent = tool_input.get("subagent_type")
@@ -54,15 +60,38 @@ def _load_state(claim: dict) -> dict | None:
         return None
 
 
+def _waits_for(claim: dict, agent: str | None) -> bool:
+    """Return True when the claim's run has a pending agent step for `agent`."""
+    pending = (_load_state(claim) or {}).get("pending") or {}
+    return pending.get("kind") == "agent" and pending.get("agent") == agent
+
+
+def _pick_claim(claims: list[dict], event: dict) -> dict | None:
+    """Return the claim the launch in `event` is judged against, or None when none applies.
+
+    The claim whose run is named on the prompt's `Run folder:` line; without that line, the
+    first claim with a pending step for the launched agent."""
+    tool_input = event.get("tool_input") or {}
+    run = run_of(tool_input.get("prompt", ""))
+    if run is not None:
+        return next((c for c in claims if c.get("run") == run), None)
+    return next((c for c in claims if _waits_for(c, tool_input.get("subagent_type"))), None)
+
+
 def main(stdin: str, active: Path) -> int:
     """Return 2 and print the reason to stderr when the JSON event in `stdin` is denied, else 0.
 
-    Looks up the session's claim in `active`; unreadable input or state allows."""
+    Judges the launch against the session's claim in `active` that the prompt's run folder
+    names; unreadable input or state allows."""
     try:
         event = json.loads(stdin)
         names = claimfiles.owned_by(active, event.get("session_id"))
-        claim = claimfiles.read(active, names[0]) if names else None
-        allowed, reason = decide(event, claim, _load_state(claim) if claim else None)
+        claims = [c for c in (claimfiles.read(active, n) for n in names) if c]
+        claim = _pick_claim(claims, event)
+        state = _load_state(claim) if claim else None
+        if claim and run_of((event.get("tool_input") or {}).get("prompt", "")) is None:
+            event = {**event, "tool_input": {**event["tool_input"], "prompt": ""}}
+        allowed, reason = decide(event, claim, state)
     except Exception:
         return 0
     if not allowed:
