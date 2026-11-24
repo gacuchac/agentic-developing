@@ -10,6 +10,8 @@ from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[1]
 TEMPLATE = WORKSPACE / "templates" / "project"
+BOT_NAME = "gacuchacbot"
+BOT_EMAIL = "360311223+gacuchacbot@users.noreply.github.com"
 # Copied once from the workspace at creation, then owned by the project (each project runs its own CI).
 CI_FILES = (
     ".github/workflows/branch-order.yml",
@@ -40,9 +42,11 @@ def write_files(root: Path, files: dict[str, str]) -> None:
 
 
 def init_repo(root: Path) -> None:
-    """git init on main, commit the scaffold, create dev and uat, switch to dev."""
+    """git init on main, set the bot's no-reply identity, commit the scaffold, create dev and uat, switch to dev."""
     steps = (
         ["init", "-q", "-b", "main"],
+        ["config", "user.name", BOT_NAME],
+        ["config", "user.email", BOT_EMAIL],
         ["add", "-A"],
         ["commit", "-q", "-m", "X0: Start from the workspace project template"],
         ["branch", "dev"],
