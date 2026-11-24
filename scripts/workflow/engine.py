@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import agent_steps
 import contracts
 import decisions
 import graph
@@ -142,3 +143,29 @@ def take(state: dict, option: str, evidence: dict, ctx: Ctx, handlers: dict = HA
     out = {**out, "fix": out["fix"] + (entry["to"] == "write_unit")}
     reason = str(evidence.get("question", evidence.get("path", "")))
     return advance(enter(out, entry["to"], reason), ctx, handlers), []
+
+
+_RESULT_KEYS = {"write": "qa", "fix": "qa_fix", "code": "implementer", "subtract": "subtract"}
+
+
+def _record_errors(state: dict, step_id: str, result: dict) -> list[str]:
+    pending = state["pending"]
+    if pending["kind"] != "agent" or pending["step_id"] != step_id:
+        return [f"no agent step {step_id} is pending"]
+    return agent_steps.validate_result(_RESULT_KEYS[pending["step"]], result)
+
+
+def record(state: dict, step_id: str, result: dict, ctx: Ctx, handlers: dict = HANDLERS) -> tuple[dict, list[str]]:
+    """Record an agent's `result` for the pending step `step_id`, enter the recorded target and advance.
+
+    Returns (new state, []) when accepted. Returns (state unchanged, errors) when the pending step is
+    not the agent step `step_id` or `agent_steps.validate_result` finds errors in the result.
+    Appends {"node", "result", "to"} to the history, where to is EDGES[node]["recorded"].
+    """
+    errors = _record_errors(state, step_id, result)
+    if errors:
+        return state, errors
+    node = state["node"]
+    target = graph.EDGES[node]["recorded"]
+    out = st.with_entry(state, {"node": node, "result": result, "to": target}, ctx.now())
+    return advance(enter(out, target), ctx, handlers), []
