@@ -85,14 +85,15 @@ def _is_red(test: str, failed: list[str]) -> bool:
 
 
 def _red_run(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
-    """Run qa's added tests; `expected` when all fail and qa's reason is expected, else `unexpected`."""
+    """Run qa's added tests; `expected` when every added test (else every listed one) fails and qa's reason holds."""
     qa = _result(state, "qa_write")
     added = qa["tests_added"]
     failed = ctx.tests(ctx.repo, added)["failed"]
-    not_red = [t for t in ctx.added(ctx.repo) if not _is_red(t, failed)]
+    new_ids = ctx.added(ctx.repo)
+    not_red = [t for t in new_ids if not _is_red(t, failed)]
     red = {"tests": added, "failed": failed, "claimed": qa["red_run"], "not_red": not_red, "left_out": qa["left_out"]}
     (ctx.run / "red.json").write_text(json.dumps(red))
-    covered = bool(added) and all(_is_red(t, failed) for t in added)
+    covered = bool(new_ids) or (bool(added) and all(_is_red(t, failed) for t in added))
     return ("expected" if covered and not not_red and qa["red_run"]["reason_expected"] else "unexpected"), red, state
 
 
