@@ -100,8 +100,49 @@ def test_us7_commit_fix_done_goes_to_next_unit_refused_to_implement():
     assert EDGES["commit_fix"] == {"done": "next_unit", "refused": "implement"}
 
 
-def test_us7_next_unit_more_loops_last_and_finished_reach_done():
-    assert EDGES["next_unit"] == {"more": "write_unit", "last": "done", "finished": "done"}
+def test_us7_next_unit_more_loops_last_goes_to_subtract_finished_to_full_suite():
+    assert EDGES["next_unit"] == {"more": "write_unit", "last": "subtract", "finished": "full_suite"}
+
+
+def test_us7_subtract_recorded_goes_to_subtract_check():
+    assert EDGES["subtract"] == {"recorded": "subtract_check"}
+
+
+def test_us7_subtract_check_edges():
+    assert EDGES["subtract_check"] == {"pass": "commit_subtract", "nothing": "branch_reviews", "fail": "subtract"}
+
+
+def test_us7_commit_subtract_done_goes_to_branch_reviews_refused_back_to_subtract():
+    assert EDGES["commit_subtract"] == {"done": "branch_reviews", "refused": "subtract"}
+
+
+def test_us7_branch_reviews_edges():
+    assert EDGES["branch_reviews"] == {"PASS": "full_suite", "CHANGES": "branch_decide", "MALFORMED": "user"}
+
+
+def test_us7_branch_decide_correct_writes_unit_dismissed_go_to_full_suite():
+    assert EDGES["branch_decide"]["correct"] == "write_unit"
+    assert EDGES["branch_decide"]["overstated"] == "full_suite"
+    assert EDGES["branch_decide"]["wrong"] == "full_suite"
+
+
+def test_us7_subtract_runs_the_implementer_subtract_step():
+    assert graph.AGENT_STEPS["subtract"] == ("implementer", "subtract")
+    assert graph.kind("subtract") == "agent"
+
+
+def test_us7_branch_reviews_runs_principles_and_alternatives_once():
+    assert graph.REVIEW_PASSES["branch_reviews"] == ("principles", "alternatives")
+
+
+def test_us7_branch_decide_and_aa_decide_decide_on_their_reviews():
+    assert graph.DECIDES_ON["branch_decide"] == "branch_reviews"
+    assert graph.DECIDES_ON["aa_decide"] == "answers_ask"
+
+
+def test_us7_subtract_check_fail_and_commit_subtract_refused_are_back_edges():
+    assert graph.BACK_EDGES[("subtract_check", "fail")] == "subtract"
+    assert graph.BACK_EDGES[("commit_subtract", "refused")] == "subtract"
 
 
 def test_us7_later_review_decisions_dismissed_skip_ahead():
@@ -129,7 +170,12 @@ def test_us7_edges_match_the_unit_loop_table():
         "impl_review": {"PASS": "commit_fix", "CHANGES": "impl_decide", "MALFORMED": "user"},
         "impl_decide": {"correct": "implement", "overstated": "commit_fix", "wrong": "commit_fix"},
         "commit_fix": {"done": "next_unit", "refused": "implement"},
-        "next_unit": {"more": "write_unit", "last": "done", "finished": "done"},
+        "next_unit": {"more": "write_unit", "last": "subtract", "finished": "full_suite"},
+        "subtract": {"recorded": "subtract_check"},
+        "subtract_check": {"pass": "commit_subtract", "nothing": "branch_reviews", "fail": "subtract"},
+        "commit_subtract": {"done": "branch_reviews", "refused": "subtract"},
+        "branch_reviews": {"PASS": "full_suite", "CHANGES": "branch_decide", "MALFORMED": "user"},
+        "branch_decide": {"correct": "write_unit", "overstated": "full_suite", "wrong": "full_suite"},
         "full_suite": {"pass": "answers_ask", "fail": "full_decide"},
         "full_decide": {"code_wrong": "write_unit"},
         "answers_ask": {"PASS": "done", "CHANGES": "aa_decide", "MALFORMED": "user"},
@@ -148,6 +194,7 @@ def test_us7_agent_steps_exact():
         "qa_write": ("qa", "write"),
         "qa_fix": ("qa", "fix"),
         "implement": ("implementer", "code"),
+        "subtract": ("implementer", "subtract"),
     }
 
 
@@ -155,6 +202,7 @@ def test_us7_review_passes_exact():
     assert graph.REVIEW_PASSES == {
         "tests_review": ("tests",),
         "impl_review": ("impl",),
+        "branch_reviews": ("principles", "alternatives"),
         "answers_ask": ("answers-ask",),
     }
 
@@ -163,6 +211,7 @@ def test_us7_decides_on_exact():
     assert graph.DECIDES_ON == {
         "tests_decide": "tests_review",
         "impl_decide": "impl_review",
+        "branch_decide": "branch_reviews",
         "aa_decide": "answers_ask",
     }
 
@@ -177,6 +226,8 @@ def test_us7_back_edges_exact_with_targets():
         ("verify", "tests_touched"): "implement",
         ("commit_tests", "refused"): "qa_write",
         ("commit_fix", "refused"): "implement",
+        ("subtract_check", "fail"): "subtract",
+        ("commit_subtract", "refused"): "subtract",
     }
 
 
@@ -186,11 +237,12 @@ def test_us7_caps():
 
 
 def test_us7_kind_of_every_node():
-    agent = {"qa_write", "qa_fix", "implement"}
-    decide = {"red_decide", "tests_decide", "impl_decide", "fail_decide", "full_decide", "aa_decide"}
+    agent = {"qa_write", "qa_fix", "implement", "subtract"}
+    decide = {"red_decide", "tests_decide", "impl_decide", "fail_decide", "full_decide", "aa_decide", "branch_decide"}
     auto = {
         "write_unit", "red_run", "commit_tests", "tests_review", "verify", "impl_review", "commit_fix",
         "next_unit", "full_suite", "answers_ask",
+        "subtract_check", "commit_subtract", "branch_reviews",
     }  # fmt: skip
     expected = {n: "agent" for n in agent}
     expected.update({n: "decide" for n in decide})
