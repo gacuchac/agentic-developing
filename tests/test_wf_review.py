@@ -178,7 +178,10 @@ def _given(args):
 
 
 def test_us8_review_args_tests_has_unit_and_no_commit():
-    assert review.review_args("tests", RUN, "plan.md", None, None) == ["tests", *HEAD_ARGS, *UNIT]
+    got = review.review_args("tests", RUN, "plan.md", None, None)
+    assert got[: 1 + len(HEAD_ARGS)] == ["tests", *HEAD_ARGS]
+    assert "--commit" not in got
+    assert "/runs/p/t/unit.md" in got
 
 
 def test_us8_review_args_impl_has_unit_then_architecture():
@@ -196,7 +199,12 @@ def test_us8_review_args_commit_with_sha_and_base():
 
 def test_us8_review_args_answers_ask_with_base_gets_base():
     got = review.review_args("answers-ask", RUN, "plan.md", None, "dev")
-    assert got == ["answers-ask", *HEAD_ARGS, "--base", "dev"]
+    assert got[0] == "answers-ask"
+    assert got[1:1 + len(HEAD_ARGS)] == HEAD_ARGS
+    assert got[got.index("--base") + 1] == "dev"
+    assert "--commit" not in got
+    contexts = [got[i + 1] for i, a in enumerate(got) if a == "--context-file"]
+    assert contexts == ["/runs/p/t/decisions.tsv"]
 
 
 def test_us8_review_args_pr_with_base():
@@ -312,3 +320,25 @@ def test_us8_derive_verdict_without_source_keeps_unquoted_fail() -> None:
 def test_us8_derive_verdict_source_still_malformed_when_id_missing() -> None:
     text = "C1: PASS — ok\n"
     assert review.derive_verdict(text, US8_IDS, US8_SOURCE) == ("MALFORMED", [])
+
+
+def test_us8_expected_ids_tests_pass_is_workspace_rubric(tmp_path):
+    assert review.expected_ids("tests", tmp_path) == ["T1", "T2", "T3", "T4"]
+
+
+def test_us8_expected_ids_project_rubric_overrides(tmp_path):
+    own = tmp_path / ".claude" / "review-passes"
+    own.mkdir(parents=True)
+    (own / "tests.md").write_text("- Z1. one thing.\n- Z2. another.\n")
+    assert review.expected_ids("tests", tmp_path) == ["Z1", "Z2"]
+
+
+def test_us8_review_args_answers_ask_carries_decisions_tsv():
+    got = review.review_args("answers-ask", RUN, "plan.md", None, None)
+    assert got[got.index("--context-file") :][:2] == ["--context-file", "/runs/p/t/decisions.tsv"]
+
+
+def test_us8_review_args_tests_carries_red_json_and_unit_md():
+    got = review.review_args("tests", RUN, "plan.md", None, None)
+    pairs = [got[i + 1] for i, a in enumerate(got) if a == "--context-file"]
+    assert sorted(pairs) == ["/runs/p/t/red.json", "/runs/p/t/unit.md"]
