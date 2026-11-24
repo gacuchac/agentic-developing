@@ -57,6 +57,7 @@ def run_checks(events: list[dict], budgets: dict) -> list[dict]:
 
 
 def main() -> int:
+    """Check a run dir against a case file's budgets from the command line; return the exit code."""
     if len(sys.argv) != 3:
         sys.exit("usage: eval_checks.py <run dir> <case file>")
     run_dir, case_file = Path(sys.argv[1]), Path(sys.argv[2])

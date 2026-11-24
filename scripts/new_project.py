@@ -31,18 +31,20 @@ def project_files(name: str, description: str) -> dict[str, str]:
 
 
 def write_files(root: Path, files: dict[str, str]) -> None:
-    """Write each file under root, creating folders as needed."""
+    """Write each file under root, creating folders as needed; a file starting with `#!` is made executable."""
     for rel, text in files.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(text)
+        if text.startswith("#!"):
+            (root / rel).chmod(0o755)
 
 
 def init_repo(root: Path) -> None:
-    """git init on main, commit the scaffold (exempt from the cap as a first commit), create dev and uat, switch to dev."""
+    """git init on main, commit the scaffold, create dev and uat, switch to dev."""
     steps = (
         ["init", "-q", "-b", "main"],
         ["add", "-A"],
-        ["commit", "-q", "-m", "Start from the workspace project template"],
+        ["commit", "-q", "-m", "X0: Start from the workspace project template"],
         ["branch", "dev"],
         ["branch", "uat"],
         ["switch", "-q", "dev"],
@@ -52,6 +54,7 @@ def init_repo(root: Path) -> None:
 
 
 def main() -> int:
+    """Create a new project from the template from the command line; return the exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("name", help="folder name of the new project")
     parser.add_argument("description", help="one paragraph: what the project is")

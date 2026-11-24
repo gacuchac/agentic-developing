@@ -33,6 +33,60 @@
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}\"/scripts/hooks/launch_guard.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}\"/scripts/hooks/edit_guard.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "SubagentHandback",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}\"/scripts/hooks/subagent_record.py",
+            "timeout": 600
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}\"/scripts/hooks/subagent_record.py",
+            "timeout": 600
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}\"/scripts/hooks/session_end.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
@@ -43,7 +97,18 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}\"/scripts/hooks/agent_registry.py",
+            "timeout": 10
+          }
+        ]
       }
     ]
-  }
+  },
+  "maxEffortLevel": "high"
 }

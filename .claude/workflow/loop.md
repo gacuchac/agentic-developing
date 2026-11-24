@@ -10,7 +10,7 @@ The main orchestrator classifies every task before doing anything else and state
 - is easy to test (a few small tests at most),
 - doesn't change LLM or agent behaviour (prompts, tool definitions, model calls), since that needs evals.
 
-Route: on the task's own branch off `dev` (section 4b): `implementer`, committing by the commit cadence (section 4) → `qa` runs tests → `codex-reviewer` passes `commit` and `principles` on each commit, then `answers-ask` → done, or one fix round → PR into `dev`, reviewed as a whole by pass `pr` → merged.
+Route: on the task's own branch off `dev` (section 4b), the unit loop of section 4 in its fast lane, then the branch finish (section 4) → PR into `dev`, reviewed as a whole by pass `pr` → merged.
 
 **Parallel mode** (complex, splits into independent pieces). The task can be split into pieces that can be built at the same time: no piece changes a function or contract that another piece changes or relies on. Pieces that touch the same file in different functions count as independent. Clearly defined and easy to evaluate, even if it touches many files.
 
@@ -39,9 +39,34 @@ Every task gets a run folder `.claude/runs/<project>/<task-id>/` (git-ignored) h
 
 **Codex output.** Every call to `~/Developing/scripts/codex_review.py` (GPT-6 Sol or Luna) saves its full output as `review-<pass>-<n>.md` in the task's run folder (next to `ask.md`), or in `--run-dir` when given, with a one-line header of pass, model, base and exit code. The files are numbered, so each round keeps its own review.
 
-**Commit cadence.** Every commit has at most 30 changed lines: per file, the larger of lines added and lines deleted; tests and eval cases count; merges, deleting a whole file, and a repo's first commit (its scaffold) don't count. The workspace's `pre-commit` hook (`~/Developing/.githooks/`) enforces it in every repo under `~/Developing`. Each commit achieves one thing, and its message starts with its story or subtask: `US-n: <what this achieves>`, or `test(US-n): ...` for tests. If a step can't fit in 30 lines, split it; if it can't be split, the approach is probably wrong, so say so instead of forcing it. Never use `--no-verify`. Each new commit is reviewed on its own, oldest first (`git rev-list --reverse <last reviewed>..HEAD`): `codex-reviewer` runs pass `commit` (the ask, the plan and the earlier commits give it the big picture), then `principles` and `alternatives`, each with `--commit <sha>`. A `CHANGES` verdict is fixed in a later commit whose message names the fix.
+**Commit cadence.** Each commit achieves one thing, and its message starts with its story or subtask: `US-n: <what this achieves>`, `test(US-n): ...`, or a plan id such as `X2:`, optionally with `(i/n)` when one subtask spans several commits. There is no line cap: a commit is the size its one goal needs, and a change with two goals is two commits. Never use `--no-verify`.
+
+**Gates (code, not judgement).** The workspace's git hooks (`~/Developing/.githooks/`) run in every repo under `~/Developing`: `pre-commit` runs `ruff check` and `scripts/hooks/slop_checks.py` on the staged Python (`scripts/hooks/lint_gate.py`); `commit-msg` checks the story or subtask id (`scripts/hooks/commit_msg.py`). The root repo's CI runs ruff, the slop checks and the suite on every PR. `ruff.toml` and the slop checks enforce what review rubrics used to judge: types and docstrings, size and complexity, module state, dead code, justification comments. A rule that matters goes into a check, not into prose (see "Correction ratchet").
+
+**Proof of each commit.** No commit is made until the one before it is proven; the review gate in `pre-commit` checks it. A test commit is proven by its `tests` review, an implementation commit by its evidence record, and a commit made by hand (documents, a manual fix) by a `commit` review: `codex-reviewer` runs pass `commit` with `--commit <sha>`. `principles` and `alternatives` run once per branch, in the branch finish, not per commit. A `CHANGES` verdict is decided per finding: *correct* is fixed in a later commit whose message names the fix (`X2: Fix C2 on 875bb0a: ...`); *wrong* or *overstated* is logged with evidence (file:line and the quoted text that contradicts it). A FAIL without a quoted line is dropped, and `wf status` lists what was dropped.
+
+**Decision log.** Every decision (a finding judged, a disputed test, a lane, a pivot or revert, a blocker) gets one row in the run folder's `decisions.tsv`, kept by the `show-me-your-work` skill: append-only, evidence as a pointer, and before the PR another vendor's model reviews the trail. Older runs keep their `decisions-log.md`.
+
+**Correction ratchet.** When the same correction or the same dismissal happens twice (in the decision log, a review, or from me), the next commit on the branch makes it impossible: architecture first, then a ruff rule or a check in `slop_checks.py` or a hook, then a test, prose last (`correct`). A rubric criterion that a check now enforces is removed from the rubric in the same change. Keep the "Rule → what enforces it" table in CLAUDE.md current.
 
 **Concurrency.** At most 3 subagents run at the same time, of any kind. The main orchestrator never has more than 3 running at once, whether decomposers, workflow orchestrators or any other. Each workflow orchestrator runs its own subagents one at a time.
+
+**Driving the engine (`wf`).** In this section `wf` means `~/Developing/.venv/bin/python ~/Developing/scripts/workflow/wf.py` and `<run>` is the task's run folder, as an absolute path. The engine holds the task's state in `<run>/state.json`; nobody edits that file by hand.
+
+1. **Start.** With `ask.md` and the plan in `<run>`, and the task's branch checked out: `wf start <run> --plan plan.md` (Simple and Sequential mode, in the project's main checkout), or `wf start <run> --plan plan.md --checkout <worktree> --mode parallel` (a workflow orchestrator, in its worktree). The session now holds the task: other sessions can't drive it, and this session's edits stay inside it. `wf status <run>` shows where a task is and resumes one after a break.
+2. **Ask what is next:** `wf options <run>`. It prints a JSON list.
+   - One entry with `"kind": "agent"`: launch the agent it names (`qa` or `implementer`) with the entry's `prompt` as the whole prompt. The prompt starts with the `wf-step:` and `Run folder:` lines the hooks need; a launch without them, or for a step the engine isn't waiting for, is refused. When the agent hands back, its result is recorded for you. If `wf status <run>` still shows that step pending, write the JSON of its `workflow-result` block to `<run>/result.json` and run `wf record <run> <step_id> <run>/result.json`.
+   - Entries with `"kind": "decide"`: the engine needs a judgement. Read the review it points at (`<run>/review-<pass>-<n>.md`) and the code or test lines it names, decide each finding on its merits, write the evidence to `<run>/evidence.json` and run `wf take <run> <option> --evidence <run>/evidence.json`. The engine refuses evidence that doesn't fit and says why.
+     - `correct` and `overstated`: `{"findings": [{"id": "T2", "reason": "..."}]}`.
+     - `wrong`: `{"findings": [{"id": "T2", "reason": "...", "file": "<path>", "line": <n>, "quote": "<that line, exactly>"}]}`; the quoted line is the one that contradicts the finding.
+     - `tests_wrong`: `{"test": "<failing test id>", "quote": "<the plan line the test contradicts>"}`. `code_wrong`: `{"tests": ["<failing test id>"]}`.
+     - `escalate`: `{"question": "..."}`; it stops the task for me. `architecture_stop`: `{"path": "<the proposal file>"}`; the architecture stop rule below applies.
+   - A pending `user` step: the task waits for me. Show me what the engine shows and stop.
+3. **Repeat** until `wf status <run>` shows the node `done`. The engine then releases the task. `wf report <run>` prints the decisions, dismissals, commits and dropped findings for the summary.
+
+What the engine does on its own, between those stops: writes the unit, runs the red run, commits the tests, starts and collects the `tests` review, runs the suite, chooses the lane, runs the `impl` review in the full lane, commits the code, writes the evidence record, moves to the next unit, and at the end runs the branch finish. A refused command prints the reason; fix what it names and run it again. Never use `--no-verify`, never commit a unit by hand while the engine is waiting on it, and never edit `state.json`.
+
+`wf release <run> --reason "<why>"` frees a task this session holds without finishing it. It is mine to ask for; a subagent can't run it.
 
 ### Plan (main orchestrator, for every task)
 
@@ -57,14 +82,26 @@ Each checked plan then goes to the build. In Parallel mode the main orchestrator
 ### Build (a workflow orchestrator in Parallel mode, the main session in Sequential mode)
 
 1. **Set up.** Work on the task's own branch, starting from dev's tip (section 4b). Write the plan files to the run folder and the eval cases to `evals/cases/`.
-2. **Write tests.** `qa` writes tests for the plan under `tests/`, each named after the user story it checks, and confirms they fail for the right reason. It commits them by the commit cadence.
-3. **Implement.** `implementer` builds each subtask, committing by the commit cadence. It never edits tests or evals. Then every new commit, tests included, is reviewed on its own (commit cadence); a `CHANGES` verdict goes back to the implementer.
-4. **Run tests.** `qa` runs the new and affected tests first and reports pass/fail with the failing output. Once they pass, it runs the full suite once before the final review.
+2. **Unit loop, one plan subtask at a time.** The workflow engine (`wf`, `scripts/workflow/wf.py`) owns the order: it names each step, makes every commit, runs the tests, starts each review and writes each evidence record. The main session (Sequential mode) or the workflow orchestrator (Parallel mode, with `wf start --checkout <worktree> --mode parallel`) asks `wf options`, launches the agent the engine names with the prompt it gives, and decides with evidence where the engine asks (`wf take`). qa and the implementer never commit. The steps below are what the engine does.
+   1. **Lane.** The decomposer tags each subtask `fast` or `full`. Full: it changes a contract, a schema or migration, a risky seam (auth, network, an external service, deploy configuration) or security; everything else is fast. Every unit gets the `tests` review of its test commit; full adds the `impl` review of the uncommitted code before it is committed. Single purpose: a fast unit takes the full lane anyway when its change touches a code file its `Files:` line doesn't name, or is over the larger of 30 lines and twice its `Estimate:`.
+   2. **Tests first.** `qa` writes tests under `tests/` for the subtask, named after its story, testing behaviour through public contracts (the two-edit test in `qa.md`). It runs them and confirms they fail for the expected reason. Every added test must fail before the code exists: a case that already passes is left out, and the engine's red run refuses a test commit that holds one. It returns only its result block. For a bug, the failing test reproduces the bug (`tdd` skill).
+   3. **Commit the failing tests.** The main session commits qa's tests on their own (`test(US-n): ...`), seen red (`principle-sequence-verifiable-units`: the failing test first, then the fix). The `tests` review of that commit (the spec: do these tests check the done line and the stories through public contracts?) runs in the background, in a worktree at the commit, while the implementer works. The branch may be red between this commit and the fix; the suite is green again before the next subtask starts.
+   4. **Implement until green.** `implementer` writes the code and iterates on its own until the unit's tests, the full suite, `ruff check` and `slop_checks.py` pass. It never edits tests; a test it believes is wrong stays failing and goes in `tests_disputed`. It returns only its result block.
+   5. **Verify.** Before the fix is committed, the engine collects the `tests` review of the test commit, and its findings are decided (proof of each commit, above): a finding that is right sends the tests back to qa, and the fix is committed only against tests whose review is settled. The engine then checks `git diff` shows no change under `tests/`, reruns the suite itself, and any disputed test is decided with evidence (*tests wrong*: quote the plan or ask line the test contradicts → back to qa; otherwise → back to the implementer).
+   6. **Commit and prove.** Commit the fix (the hooks run the gates), then run `python3 scripts/hooks/evidence_record.py write --run <run folder>`. It measures the evidence itself: every added test red at the test commit and green now, the suite green apart from declared `Breaks:`, no `tests/` edits, no uncovered signature change. The commit is accepted on that record, not on a model reading the code. In the full lane, the `impl` review reads the code as well. A manual commit, such as docs, may use a `commit` review instead.
+   **Design and contracts.** Before code that sets a new shape, sketch it with `architect`. The `principle-redesign-from-first-principles` and `principle-migrate-callers-then-delete-legacy-apis` skills apply; when they change a public contract, the `architecture` skill runs first and waits for my approval (CLAUDE.md). A migration may delete tests that only protected the old implementation, naming each one in the commit message.
+   **Planned breakage.** Within a rewrite or migration whose plan I approved with declared phase boundaries, intermediate commits on the task branch may leave declared parts failing (`principle-outcome-oriented-execution`). The branch is fully green, with the full suite and every gate, before the branch finish; nothing red is merged into dev.
+   Stop after 3 rounds back to the same step within one subtask and report what blocks.
+3. **Branch finish.** After the last subtask:
+   1. **Subtract.** Run `deslop` and `no-comments` over the branch diff against the launch hash. Their edits are a commit like any other (gates, evidence record). Behaviour and tests stay the same.
+   2. **Principles and alternatives,** once over the whole branch: `codex-reviewer` runs both with `--base <launch hash>` and no `--commit` on a clean tree. Decide findings as for commit reviews.
+   3. **Full suite** once.
+4. **Writing.** Reports, PR descriptions and summaries for me follow `unslop`; docs and READMEs also follow `technical-writing`. The PR itself is opened or updated with the `visual-pr` skill (one-sentence why, 1–3 notes, a structural change outline). Plans and options are shown visually where that's clearer (`show-me`).
 5. **Run evals (only if the Evals flag is yes).** For each case: `eval-runner` plays the user, `~/Developing/scripts/eval_checks.py` runs the code checks, and `eval-judge` scores the run (section 5b).
-6. **Final review.** `codex-reviewer` runs pass `answers-ask` (GPT-6 Luna) with the launch hash as the base. It reads the plan, every commit's message and file stats, and each commit's verdict, not the diff, which was reviewed commit by commit.
+6. **Final review.** `codex-reviewer` runs pass `answers-ask` (GPT-6 Luna) with the launch hash as the base. It reads the plan, every commit's message and file stats, and each saved review verdict, not the diff: every commit was proven before the next was made.
 7. **Decide.**
    - all tests pass, every eval case passes, and `answers-ask` is `PASS` → done: the branch is a series of reviewed commits (`alternatives` findings are reported, not acted on, unless one is clearly better and cheap),
-   - tests fail, an eval case fails, or review finds a defect in the code → back to step 3,
+   - tests fail, an eval case fails, or review finds a defect in the code → back to step 2,
    - review or evals show the plan itself was wrong, or the tests don't test the real ask → back to Plan: a workflow orchestrator stops and reports STATUS: REPLAN with the reason; the main orchestrator sends that reason to `decomposer`, then cross-checks and reviews the new plan before it's built again,
    - any subagent reports `ARCHITECTURE CHANGE`, or a review finding can only be fixed by an architecture change → follow the architecture stop rule below.
 
@@ -76,7 +113,7 @@ For each finished task, one branch at a time, working in that task's worktree (P
 
 1. Fetch and merge the latest dev into the branch. The main orchestrator resolves any conflict itself. If a conflict can only be resolved by changing a contract or the architecture, it applies the architecture stop rule.
 2. `qa` runs the full suite on the branch.
-3. Push the branch and open a PR into dev. `codex-reviewer` runs pass `pr` (GPT-6 Sol) over the full PR with `--base dev`, the PR's target (it diffs from where the branch last met dev, so dev's commits merged in are left out); with no remote, run it before the local merge. Fix a `CHANGES` verdict in new commits, each reviewed by the commit cadence, then run `pr` again (at most 3 rounds, then report to me). Then wait for the checks and merge it (section 4b).
+3. Push the branch and open a PR into dev with the `visual-pr` skill. Before that, run `blast-radius` on any change you don't fully trust. `codex-reviewer` runs pass `pr` (GPT-6 Sol) over the full PR with `--base dev`, the PR's target (it diffs from where the branch last met dev, so dev's commits merged in are left out); with no remote, run it before the local merge. Fix a `CHANGES` verdict in new commits, each reviewed by the commit cadence, then run `pr` again (at most 3 rounds, then report to me). When `pr` passes, keep the task's records in its project: copy from the run folder `ask.md`, `plan.md`, `architecture.md` (if any), `decisions.tsv`, every `review-*.md` and every `evidence-*.json`, and the output of `wf report <run>` as `report.md`, into `<project>/docs/evidence/<task-id>/`, and commit only that folder on the branch with the subject `X0: Records of <task-id>`. Then wait for the checks and merge it (section 4b).
 4. Remove the worktree (`git -C <project> worktree remove ~/Developing/.worktrees/<project>/<task-id>`), pull dev in the project's main checkout, and mark the task merged on the board.
 
 When every task launched together is merged, review the combined result in two parts. **Board check** (the main orchestrator, no model): every task launched together is marked merged on the board, and each one's own `answers-ask` and `pr` reviews ended in `PASS` or a fix. **Cross-task review:** `codex-reviewer` runs pass `pr` (GPT-6 Sol) on `dev` with `--base <launch hash>`, `--ask-file` the top-level `ask.md` and `--plan-file` the `build-board.md`, looking for problems between tasks: duplication, clashing contracts, one task undoing another. A `CHANGES` verdict becomes a new `bugfix/` task on the board. Then the board's newly ready tasks go back to Plan.
@@ -100,6 +137,7 @@ When every task launched together is merged, review the combined result in two p
 - Merging into `dev` or `uat` may deploy that environment; that's allowed. Nothing reaches production without my approval.
 - If the repo has no GitHub remote (as in the smoke test), merge into `dev` locally with `git merge --no-ff <branch>` instead of a PR, and say so. That's the only exception.
 - `.github/workflows/branch-order.yml` (section 7.26) checks every PR's source branch against the table above. Branch protection (section 9b) makes PRs and my approval on `main` mandatory; I apply it by hand.
+- One session per task, and one worktree per session. A session drives at most one task and touches only that task's run folder, checkout and branch; other tasks are read-only to it. `wf` records the owner in `.claude/runs/.active/<project>--<task-id>.json` and refuses a task another live session holds; the `PreToolUse` guards refuse launches off the graph and edits outside the task, and `pre-commit` refuses a branch another session holds. A stale claim (its process is gone) is taken over and logged; only I free a live one, with `wf release <run> --reason ...`. Each session's worktree is `.worktrees/<project>/<task-id>/`; when other sessions are active, change the workflow from a root worktree, not the root checkout, and keep the root checkout on `dev`.
 
 ## 5. Review passes
 
@@ -114,27 +152,27 @@ Each pass is narrow on purpose. Each lives in `.claude/review-passes/<pass>.md` 
 
 **GPT-6 Luna, with a fixed rubric.** Luna is fast and cheap but reliable only with a clear rubric, so each pass answers every criterion with PASS, FAIL or N/A plus evidence (file and line). The verdict is `CHANGES` if any criterion is FAIL.
 
-- **commit** (one commit, `--commit <sha>`; needs the ask and the plan): sees that commit's message and diff, plus the one-line log of earlier commits.
-  - C1. The message states one clear goal and names its story or subtask (US-n or subtask n).
+- **tests** (one unit's test commit, `--commit <sha>`, with `unit.md` and the red run): judges the unit's tests as its spec. T1 they check planned behaviour through the public contract; T2 the done line and the plan's edge cases are covered, without asking for a case that already passes before the code; T3 no assertion a trivial stub would pass; T4 a broken behaviour fails a test and a different implementation of the same behaviour doesn't.
+- **impl** (one unit's uncommitted code, no `--commit`, with `unit.md` and `architecture.md`; the full lane only): I1 the code does what the unit asks and nothing else, and stays in the unit's files; I2 no special-casing of test inputs; I3 no contract change outside an approved `architecture.md`.
+- **commit** (one commit made by hand, `--commit <sha>`; needs the ask and the plan): sees that commit's message and diff, plus the one-line log of earlier commits.
+  - C1. The message states one clear goal (its story or subtask id is checked by the `commit-msg` hook).
   - C2. The diff does what the message says, fully.
   - C3. The diff does nothing the message doesn't say.
   - C4. The goal is a step toward the ask and the plan, not a detour or a change the plan doesn't call for.
-  - C5. No test gaming (hard-coded expected outputs, special-casing test inputs), and no test deleted, skipped or loosened.
+  - C5. No test gaming (hard-coded expected outputs, special-casing test inputs), and no test deleted, skipped or loosened, except a test that only protected an old implementation in an approved migration, or one that passed before its unit's implementation existed.
 - **answers-ask** (whole branch; needs `--base`, the ask and the plan): sees every commit's message and file stats and each commit's verdict, never the diff.
   - A1. Every user story in `plan.md` is delivered by commits you can name (sha and message).
   - A2. Every subtask's done line is met by a named commit.
   - A3. For a bug: a commit names the fix for the reported failing case and its test.
-  - A4. Every commit has a `commit` review verdict, and each `CHANGES` is followed by a later commit that names the fix.
+  - A4. Every saved `CHANGES` verdict has each finding fixed by a later commit that names it, or dismissed in the decision log. A commit with no saved verdict was accepted on its evidence record.
   - A5. No commit deletes, skips or loosens a test, judging from its message, its file stats and its review.
   - A6. Every file changed belongs to a subtask in the plan.
-- **principles** (run per commit, with `--commit <sha>`):
+- **principles** (once per branch, `--base <launch hash>`): types, docstrings, size and module state are checked by ruff and `slop_checks.py` before review, so the rubric keeps only judgement calls.
   - P1. Each new or changed function has one purpose.
-  - P2. Each public function has typed inputs and outputs and a docstring that states its contract.
   - P3. No public function's signature or output shape changed, unless an approved `architecture.md` covers it.
-  - P4. No function relies on hidden or global mutable state.
   - P5. Functions use other functions only through their contracts, not their internals.
   - P6. Each module keeps one clear responsibility.
-- **alternatives** (run per commit, with `--commit <sha>`):
+- **alternatives** (once per branch, `--base <launch hash>`):
   - L1. Is there an approach with clearly less code or fewer moving parts that meets the same stories?
   - L2. Is there a clearly more robust approach (errors, edge cases) at similar cost?
   - L3. Does the change rebuild something the codebase or the standard library already provides?
@@ -188,8 +226,8 @@ Route, one task at a time, in the main session:
 1. Check the project's main checkout is on dev, clean and up to date (section 4b). Create `feature/<task-id>` (or `bugfix/<task-id>`) off dev. Write `ask.md` to `.claude/runs/<project>/<task-id>/`.
 2. Call one `decomposer` to write `plan.md`. No cross-check and no plan review. If its Contracts section lists any changed function, or it reports `ARCHITECTURE CHANGE`, apply the architecture stop rule.
 3. **Checkpoint:** show me `plan.md` and wait until I approve it. Tell me in a few lines what to check.
-4. `qa` writes and commits tests (commit cadence, section 4). **Checkpoint:** confirm they fail because the feature is missing, and say so.
-5. `implementer` builds; `qa` runs the new and affected tests, then the full suite once. If tests fail, back to the implementer.
+4. `qa` writes tests; the main session commits them (commit cadence and gates, section 4). **Checkpoint:** confirm they fail because the feature is missing, and say so.
+5. `implementer` builds until green; the main session reruns the full suite and commits. If tests fail, back to the implementer.
 6. Review: run `codex-reviewer` pass `commit` on each commit, then `answers-ask`. If `codex` isn't installed or signed in, skip the review, say so in the summary, and never pretend it ran.
 7. If the verdict is `CHANGES`, one fix round (back to step 5, then review again). If it still fails, stop and report what blocks.
 8. Run pass `pr` over the full branch with `--base dev`, before the merge (when the PR opens, or before a local merge), with one fix round. Then merge the task's branch, already a series of commits within the cadence, into dev (by PR, or `git merge --no-ff` locally if there is no remote). Finish with a short summary: what was built, test result, the review verdict or that it was skipped, and what is left.

@@ -1,5 +1,7 @@
 import importlib.util
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 _path = Path(__file__).resolve().parents[1] / "scripts" / "codex_review.py"
@@ -96,3 +98,105 @@ def test_principles_read_workspace_then_project_claude_md(tmp_path):
     rules = cr.project_rules(tmp_path)
     assert "Coding principles" in rules and rules.endswith("project rule")
     assert cr.project_rules(cr.WORKSPACE).count("Coding principles") == 1
+
+
+def test_us4_tests_and_impl_need_ask_and_plan():
+    for name in ("tests", "impl"):
+        assert name in cr.PASSES
+        assert cr.missing_args(name, {}) == ["--ask-file", "--plan-file"]
+        assert cr.missing_args(name, {"ask_file": "a", "plan_file": "p"}) == []
+
+
+def test_us4_tests_and_impl_run_on_luna_not_sol(monkeypatch):
+    monkeypatch.setenv("CODEX_LUNA_MODEL", "luna-model")
+    monkeypatch.setenv("CODEX_SOL_MODEL", "sol-model")
+    for name in ("tests", "impl"):
+        assert name not in cr.SOL_PASSES and name not in cr.NO_DIFF_PASSES
+        assert cr.resolve_model(name, None) == "luna-model"
+
+
+def test_us4_uncommitted_changes_show_tracked_edit_and_untracked_file(tmp_path, monkeypatch):
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _commit(tmp_path, "kept.txt", "old line\n", "US-1: add kept")
+    (tmp_path / "kept.txt").write_text("new line\n")
+    (tmp_path / "fresh.txt").write_text("brand new\n")
+    monkeypatch.chdir(tmp_path)
+    shown = cr.collect_changes(None)
+    assert "-old line" in shown and "+new line" in shown
+    assert "fresh.txt" in shown and "brand new" in shown
+
+
+def test_us4_every_pass_has_a_prompt_file(tmp_path):
+    for name in cr.PASSES:
+        assert cr.pass_prompt_path(name, tmp_path).exists(), name
+
+
+def test_us3_review_tree_checks_out_that_sha_and_is_removed_afterwards(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _base, second, _third = _repo_with_three_commits(repo)
+    (repo / "scratch.txt").write_text("dirty\n")
+    monkeypatch.chdir(repo)
+    with cr.review_tree(second) as tree:
+        seen = Path(tree)
+        assert (seen / "two.txt").read_text() == "two body\n"
+        assert not (seen / "three.txt").exists()
+        assert not (seen / "scratch.txt").exists()
+    assert not seen.exists()
+
+
+def test_us3_review_tree_is_removed_when_the_block_raises(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _base, second, _third = _repo_with_three_commits(repo)
+    monkeypatch.chdir(repo)
+    seen = None
+    try:
+        with cr.review_tree(second) as tree:
+            seen = Path(tree)
+            assert seen.exists()
+            raise RuntimeError("boom")
+    except RuntimeError:
+        pass
+    assert seen is not None and not seen.exists()
+
+
+def test_us3_main_reviews_a_non_head_commit_inside_a_worktree(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _base, second, _third = _repo_with_three_commits(repo)
+    (repo / "scratch.txt").write_text("dirty\n")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    cwd_file = tmp_path / "cwd.txt"
+    stub = bin_dir / "codex"
+    stub.write_text(
+        "#!/bin/sh\n"
+        f"pwd -P > '{cwd_file}'\n"
+        'while [ $# -gt 0 ]; do\n'
+        '  if [ "$1" = "--output-last-message" ]; then echo "VERDICT: PASS" > "$2"; fi\n'
+        "  shift\n"
+        "done\n"
+        "exit 0\n"
+    )
+    stub.chmod(0o755)
+    ask, plan, run_dir = tmp_path / "ask.md", tmp_path / "plan.md", tmp_path / "run"
+    ask.write_text("ask")
+    plan.write_text("plan")
+    run_dir.mkdir()
+    env = {k: v for k, v in os.environ.items() if k not in ("CODEX_LUNA_MODEL", "CODEX_SOL_MODEL")}
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    run = subprocess.run(
+        [sys.executable, str(_path), "commit", "--commit", second, "--ask-file", str(ask),
+         "--plan-file", str(plan), "--run-dir", str(run_dir), "--model", "stub-model"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert "refused" not in run.stderr
+    assert run.returncode == 0, run.stderr
+    ran_in = Path(cwd_file.read_text().strip())
+    assert ran_in != repo.resolve()
+    assert not ran_in.exists()

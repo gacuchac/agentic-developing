@@ -8,7 +8,7 @@ This folder is the development workspace and its own git repo (`gacuchac/agentic
 - `.githooks/`: git hooks for every repo under this folder, enabled once by the global git config (README).
 - `templates/project/`: what a new project starts from (CLAUDE.md, .gitignore, CI). Copied once by `scripts/new_project.py`, never synced.
 - `tests/`: tests of the workflow scripts. `docs/`: reference docs.
-- `.claude/runs/<project>/<task-id>/`: per-task working files (git-ignored). `.worktrees/<project>/<task-id>/`: Parallel-mode worktrees (git-ignored).
+- `.claude/runs/<project>/<task-id>/`: per-task working files (git-ignored). A project's plans (`/planner`) live in its own repo under `docs/planning/<plan-id>/`. `.worktrees/<project>/<task-id>/`: Parallel-mode worktrees (git-ignored).
 - Agents a project ships as part of its product (for example a chatbot's agent) are project code in the project's own folders, not `.claude/` agents.
 
 ## Coding principles (all projects)
@@ -21,6 +21,23 @@ This folder is the development workspace and its own git repo (`gacuchac/agentic
 - No subagent changes the solution architecture or the software architecture itself. It writes the proposed change to a file in the run folder and stops, and the main session brings it to me before anything goes on.
 - Functions don't depend on hidden state or on the internals of other functions; only on their contracts.
 - Workflow scripts are Python only.
+- If an instruction file (this one, `loop.md`, an agent or skill file) conflicts with the code, follow the code and report the conflicting line.
+
+## Rule → what enforces it
+A rule that matters is enforced by a check; prose is for judgement calls. When the same correction happens twice, move it into this table (`loop.md`, "Correction ratchet").
+
+| Rule | Enforced by |
+| --- | --- |
+| Public functions are typed and have a contract docstring | ruff `ANN`, `D1` (`ruff.toml`) |
+| One purpose per function, small enough to read | ruff `C901`, `PLR0911`–`PLR0915` |
+| No hidden or module-level mutable state, no `global` | `slop_checks.py` SLOP002 |
+| No comments that justify a workaround; no TODO/HACK markers or blanket `noqa` | `slop_checks.py` SLOP001, ruff `FIX`, `PGH` |
+| Pure workflow modules (`scripts/workflow/`) do no I/O | `slop_checks.py` SLOP003 |
+| A commit subject names its story or subtask | `commit-msg` (`commit_msg.py`) |
+| A commit is proven before the next one is made: a `tests` or `commit` review, or a complete evidence record | `pre-commit` (`review_gate.py`, `evidence_record.py`) |
+| Every added test fails before the code it tests exists | the engine's red run (`autonodes.py`, `checks.added_tests`) |
+| A commit has one purpose: a change that leaves its unit's files, or is far over its estimate, is read before it is committed | the engine's `verify` (`units.scope_reasons`), then the `impl` review I1 |
+| Contracts stay stable unless an approved `architecture.md` covers the change | `principles` review P3 (judgement) |
 
 ## How work is routed
 You are the main orchestrator. For every feature or bug:
@@ -37,7 +54,8 @@ You are the main orchestrator. For every feature or bug:
 11. Never commit to main, uat or dev directly, in any repo. Each task gets a feature/, bugfix/ or hotfix/ branch off a clean, up-to-date dev of its project and comes back by PR. If a checkout has uncommitted changes, stop and ask me. You may merge PRs into dev and promote dev or a hotfix to uat. Never approve or merge a PR into main; I do that.
 
 ## Conventions
-- Python, tests with pytest under each project's tests/. Run them with the project's `.venv/bin/python -m pytest` when it has a `.venv`, else `python3 -m pytest`. Use `set -o pipefail` when piping test output.
+- Python for backends and the workflow scripts, tests with pytest under each project's tests/. Run them with the project's `.venv/bin/python -m pytest` when it has a `.venv`, else `python3 -m pytest`. Use `set -o pipefail` when piping test output.
+- TypeScript and React for front ends (`typescript-best-practices`, `principle-type-system-discipline`), tested with that project's own runner, named in its CLAUDE.md.
 - Eval cases are written to the task's run folder, then committed to evals/cases/ in the project on the task's branch; eval runs go in the project's evals/runs/ (git-ignored). The implementer never edits evals/.
 - Branches map to environments: dev to dev, uat to UAT, main to production. Merging into dev or uat may deploy that environment, which is allowed; nothing reaches production without my approval.
 - Quick deploys outside that flow use my personal Railway and GitHub accounts. Deploy only when I ask.

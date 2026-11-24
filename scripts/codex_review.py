@@ -10,16 +10,20 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[1]  # Developing/: run this script from inside a project
-PASSES = ("plan", "answers-ask", "commit", "pr", "alternatives", "principles", "ideas", "judge")
+PASSES = ("plan", "answers-ask", "commit", "pr", "alternatives", "principles", "ideas", "judge", "tests", "impl")
 NO_DIFF_PASSES = frozenset({"plan", "ideas", "judge"})
 SOL_PASSES = frozenset({"plan", "ideas", "pr"})  # every other pass runs on Luna
 REQUIRED = {
     "commit": ("commit", "ask_file", "plan_file"),
     "answers-ask": ("base", "ask_file", "plan_file"),
     "pr": ("base", "ask_file", "plan_file"),
+    "tests": ("ask_file", "plan_file"),
+    "impl": ("ask_file", "plan_file"),
 }
 
 
@@ -31,6 +35,19 @@ def missing_args(pass_name: str, given: dict[str, str | None]) -> list[str]:
 def git(*args: str) -> str:
     """Run a git command and return stdout."""
     return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
+
+
+@contextmanager
+def review_tree(sha: str) -> Iterator[Path]:
+    """Yield the path of a detached worktree checked out at sha; remove it and its temp folder on exit."""
+    git("worktree", "prune")
+    with tempfile.TemporaryDirectory() as tmp:
+        tree = Path(tmp) / "tree"
+        git("worktree", "add", "--detach", str(tree), sha)
+        try:
+            yield tree
+        finally:
+            git("worktree", "remove", "--force", str(tree))
 
 
 def collect_changes(base: str | None) -> str:
@@ -130,7 +147,7 @@ def find_tool(name: str) -> str:
     return shutil.which(name, path=f"{os.environ.get('PATH', '')}:/opt/homebrew/bin:/usr/local/bin") or name
 
 
-def run_codex(prompt: str, model: str) -> tuple[int, str]:
+def run_codex(prompt: str, model: str, cwd: Path | None = None) -> tuple[int, str]:
     """Run codex exec read-only with the prompt on stdin; return exit code and final message."""
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "last_message.md"
@@ -150,6 +167,7 @@ def run_codex(prompt: str, model: str) -> tuple[int, str]:
             text=True,
             capture_output=True,
             check=False,
+            cwd=cwd,
         )
         message = out.read_text() if out.exists() else result.stderr
         return result.returncode, message
@@ -169,12 +187,14 @@ def save_output(folder: Path, pass_name: str, model: str, base: str | None, code
     while (folder / f"review-{pass_name}-{n}.md").exists():
         n += 1
     path = folder / f"review-{pass_name}-{n}.md"
-    header = f"<!-- pass: {pass_name} | model: {model} | base: {base or 'HEAD'} | exit: {code} | {time.strftime('%Y-%m-%d %H:%M:%S')} -->\n"
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    header = f"<!-- pass: {pass_name} | model: {model} | base: {base or 'HEAD'} | exit: {code} | {stamp} -->\n"
     path.write_text(header + message)
     return path
 
 
 def main() -> int:
+    """Run one review pass from the command line; return the process exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pass_name", choices=PASSES)
     parser.add_argument("--ask-file")
@@ -211,7 +231,8 @@ def main() -> int:
         context_files(args.context_file),
     )
     model = resolve_model(args.pass_name, args.model)
-    code, message = run_codex(prompt, model)
+    with review_tree(args.commit) if args.commit else nullcontext() as tree:
+        code, message = run_codex(prompt, model, tree)
     folder = output_dir(args.ask_file, args.run_dir)
     label = f"commit {args.commit}" if args.commit else args.base
     if folder is not None:

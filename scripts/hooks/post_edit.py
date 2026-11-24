@@ -27,6 +27,7 @@ def lint(ruff: str, path: str) -> subprocess.CompletedProcess:
 
 
 def main() -> int:
+    """Hook entry point: format and lint the edited .py file named on stdin; return the exit code."""
     path = edited_path(json.load(sys.stdin))
     ruff = find_ruff()
     if not path.endswith(".py") or ruff is None:

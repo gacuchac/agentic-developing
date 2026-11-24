@@ -1,0 +1,313 @@
+"""Tests of scripts/workflow/units.py: unit text from the plan, and fix units."""
+
+import units
+
+PLAN = """# Plan
+
+Intro text.
+
+## User stories
+- US-1: something
+
+## Subtasks
+Each `### N.` heading is one unit.
+
+### 1. state.py: create the state (US-6)
+Estimate: ~24 lines.
+
+Contracts:
+- `new_state()` gives the shape.
+
+### 2. graph.py: nodes (US-1, US-2)
+Estimate: ~10 lines.
+
+#### Details
+| col | val |
+|-----|-----|
+| a   | 1   |
+
+More text.
+
+### 6b. review.py: extra (US-3)
+Body of 6b.
+
+### Notes
+This is not a unit.
+
+### 3. last.py: final (US-4)
+Final body line one.
+Final body line two.
+
+## Files and functions
+- state.py: new_state
+
+## Decisions
+- D1: something
+"""
+
+
+def _by_prefix(result, prefix):
+    return [u for u in result if u.startswith(prefix)]
+
+
+def test_us6_plan_units_count_and_order():
+    got = units.plan_units(PLAN)
+    heads = [u.splitlines()[0] for u in got]
+    assert heads == [
+        "### 1. state.py: create the state (US-6)",
+        "### 2. graph.py: nodes (US-1, US-2)",
+        "### 6b. review.py: extra (US-3)",
+        "### 3. last.py: final (US-4)",
+    ]
+
+
+def test_us6_plan_units_exact_text_of_each_unit():
+    got = [u.rstrip("\n") for u in units.plan_units(PLAN)]
+    assert got[0] == (
+        "### 1. state.py: create the state (US-6)\nEstimate: ~24 lines.\n\nContracts:\n- `new_state()` gives the shape."
+    ).rstrip("\n")
+    assert got[2] == "### 6b. review.py: extra (US-3)\nBody of 6b."
+    assert got[3] == ("### 3. last.py: final (US-4)\nFinal body line one.\nFinal body line two.")
+
+
+def test_us6_plan_units_keep_subheading_and_table_inside_unit():
+    unit2 = units.plan_units(PLAN)[1].rstrip("\n")
+    assert unit2 == (
+        "### 2. graph.py: nodes (US-1, US-2)\n"
+        "Estimate: ~10 lines.\n"
+        "\n"
+        "#### Details\n"
+        "| col | val |\n"
+        "|-----|-----|\n"
+        "| a   | 1   |\n"
+        "\n"
+        "More text."
+    )
+
+
+def test_us6_plan_units_last_unit_stops_at_next_section():
+    last = units.plan_units(PLAN)[-1]
+    assert "## Files and functions" not in last
+    assert "## Decisions" not in last
+    assert "new_state" not in last
+    assert "D1" not in last
+
+
+def test_us6_plan_units_unit_n_is_item_n_minus_1():
+    got = units.plan_units(PLAN)
+    assert got[0].startswith("### 1. ")
+    assert got[1].startswith("### 2. ")
+
+
+def test_us6_plan_units_6b_heading_counts_as_unit():
+    got = units.plan_units(PLAN)
+    assert len(_by_prefix(got, "### 6b. ")) == 1
+    assert "Body of 6b." in got[2]
+
+
+def test_us6_plan_units_unnumbered_heading_is_not_unit_and_ends_previous():
+    got = units.plan_units(PLAN)
+    assert not _by_prefix(got, "### Notes")
+    assert all("This is not a unit." not in u for u in got)
+    assert all("### Notes" not in u for u in got)
+    assert "Body of 6b." in got[2]
+
+
+def test_us6_plan_units_no_headings_gives_empty_list():
+    assert units.plan_units("# Plan\n\n## Subtasks\nNothing here.\n### Notes\nx\n") == []
+    assert units.plan_units("") == []
+
+
+def test_us6_plan_units_requires_dot_and_space_after_number():
+    assert units.plan_units("### 1 no dot\nbody\n### 2.nospace\nbody\n") == []
+
+
+def test_us6_fix_text_exact_output():
+    unit = "### 7. thing (US-7)\nEstimate: ~5 lines.\nBody."
+    out = units.fix_text(unit, "principles P2 on abc1234", ["FAIL a", "FAIL b"])
+    # no trailing newline
+    assert out == ("### 7. thing (US-7)\nFix: principles P2 on abc1234\nFAIL a\nFAIL b")
+
+
+def test_us6_fix_text_excludes_rest_of_plan_unit_body():
+    unit = "### 7. thing (US-7)\nEstimate: ~5 lines.\nBody."
+    out = units.fix_text(unit, "tests T1,T2 on deadbee", ["tests/x.py::t1"])
+    assert "Estimate" not in out and "Body." not in out
+    assert out.splitlines()[:2] == ["### 7. thing (US-7)", "Fix: tests T1,T2 on deadbee"]
+
+
+def test_us6_fix_text_keeps_every_line_in_order():
+    lines = [f"line {i}" for i in range(5)]
+    out = units.fix_text("### 1. x (US-1)\nbody", "p 1 on s", lines)
+    assert out.splitlines()[2:] == lines
+
+
+def test_us6_fix_text_no_lines_is_heading_and_fix_line():
+    assert units.fix_text("### 1. x (US-1)\nbody", "p 1 on s", []) == "### 1. x (US-1)\nFix: p 1 on s"
+
+
+UNIT3 = """### 3. graph.py: edges of the unit loop (US-7)
+Estimate: ~10 lines.
+
+Contracts:
+- something (not a story)
+"""
+
+
+def test_us10_commit_message_plan_unit():
+    assert units.commit_message(UNIT3) == "US-7: graph.py: edges of the unit loop"
+
+
+def test_us10_commit_message_keeps_multiple_stories_whole():
+    md = "### 5. a.py: two things (US-9, US-10)\nBody."
+    assert units.commit_message(md) == "US-9, US-10: a.py: two things"
+
+
+def test_us10_commit_message_fix_unit():
+    md = units.fix_text(UNIT3, "principles P4 on abc1234", ["detail line"])
+    assert units.commit_message(md) == ("US-7: Fix principles P4 on abc1234: graph.py: edges of the unit loop")
+
+
+def test_us10_commit_message_last_parentheses_are_the_stories():
+    md = "### 4. graph.py: kinds (and tables) (US-7)\nBody."
+    assert units.commit_message(md) == "US-7: graph.py: kinds (and tables)"
+
+
+def test_us10_commit_message_6b_heading():
+    md = "### 6b. review.py: extra (US-3)\nBody of 6b."
+    assert units.commit_message(md) == "US-3: review.py: extra"
+
+
+def test_us10_commit_message_no_parentheses_gives_title_alone():
+    md = "### 7. misc.py: no stories\nBody."
+    assert units.commit_message(md) == "misc.py: no stories"
+
+
+def test_us10_commit_message_ignores_body_lines():
+    md = "### 3. graph.py: edges (US-7)\nNote (US-99) here\nFix: not directly after\nmore"
+    assert units.commit_message(md) == "US-7: graph.py: edges"
+
+
+def test_us10_test_commit_message_one_story():
+    assert units.test_commit_message("### 3. Do the thing (US-9)\nEstimate: 1") == "test(US-9): Do the thing"
+
+
+def test_us10_test_commit_message_story_list():
+    assert units.test_commit_message("### 3. Do the thing (US-9, US-10)") == "test(US-9, US-10): Do the thing"
+
+
+def test_us10_test_commit_message_fix_unit():
+    unit = "### 3. Do the thing (US-9)\nFix: the bug\nmore"
+    assert units.test_commit_message(unit) == "test(US-9): Fix the bug: Do the thing"
+
+
+def test_us10_test_commit_message_without_stories():
+    assert units.test_commit_message("### 3. Do the thing") == "test: Do the thing"
+
+
+def test_us10_commit_message_story_list_is_valid_subject():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "hooks" / "commit_msg.py"
+    spec = importlib.util.spec_from_file_location("commit_msg_us10", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.valid_subject(units.commit_message("### 3. Do the thing (US-9, US-10)"))
+
+
+def test_us7_lane_fast_is_read_from_the_unit():
+    assert units.unit_lane("### 1. x (US-7)\nLane: fast\nEstimate: ~3 lines.\n") == "fast"
+
+
+def test_us7_lane_full_when_missing_or_unknown():
+    assert units.unit_lane("### 1. x (US-7)\nEstimate: ~3 lines.\n") == "full"
+    assert units.unit_lane("### 1. x (US-7)\nLane: banana\n") == "full"
+    assert units.unit_lane("### 1. x (US-7)\nLane: full\n") == "full"
+
+
+def test_us7_declared_breaks_lists_each_id_stripped():
+    md = "### 1. x (US-7)\nLane: full\nBreaks: tests/test_a.py::t1, tests/test_b.py\n"
+    assert units.declared_breaks(md) == ["tests/test_a.py::t1", "tests/test_b.py"]
+
+
+def test_us7_declared_breaks_empty_without_line():
+    assert units.declared_breaks("### 1. x (US-7)\nLane: fast\n") == []
+
+
+def test_us24_unit_files_and_estimate_from_one_line():
+    md = "### 1. T (US-24)\nLane: fast\nEstimate: ~14 lines. Files: `a/b.py`, `tests/test_b.py`.\n"
+    assert units.unit_files(md) == ["a/b.py", "tests/test_b.py"]
+    assert units.unit_estimate(md) == 14
+
+
+def test_us24_unit_files_ignores_notes_outside_backticks():
+    md = "### 1. T (US-24)\n- Files: `scheduler/store.py` (new), `tests/test_store.py` (new).\n"
+    assert units.unit_files(md) == ["scheduler/store.py", "tests/test_store.py"]
+
+
+def test_us24_unit_without_lines_gives_empty_and_none():
+    md = "### 1. T (US-24)\nLane: fast\nDone when: ok\n"
+    assert units.unit_files(md) == []
+    assert units.unit_estimate(md) is None
+
+
+def test_us24_estimate_without_number_is_none():
+    md = "### 1. T (US-24)\nEstimate: documents only.\n"
+    assert units.unit_estimate(md) is None
+
+
+def test_us24_estimate_without_tilde():
+    assert units.unit_estimate("### 1. T\nEstimate: 7 lines.\n") == 7
+
+
+SCOPE_MD = "### 1. T (US-24)\nEstimate: ~14 lines. Files: `scripts/a.py`, `test_b.py`.\n"
+
+
+def test_us24_scope_inside_named_files_and_under_limit_gives_empty():
+    assert units.scope_reasons(SCOPE_MD, {"scripts/a.py": 10, "tests/test_b.py": 5}) == []
+
+
+def test_us24_scope_no_changes_gives_empty():
+    assert units.scope_reasons(SCOPE_MD, {}) == []
+
+
+def test_us24_scope_unnamed_path_is_outside():
+    assert units.scope_reasons(SCOPE_MD, {"scripts/a.py": 3, "x/other.py": 2}) == ["outside: x/other.py"]
+
+
+def test_us24_scope_outside_lists_all_paths_comma_separated():
+    got = units.scope_reasons(SCOPE_MD, {"x/o1.py": 1, "x/o2.py": 1})
+    assert got == ["outside: x/o1.py, x/o2.py"]
+
+
+def test_us24_scope_suffix_must_follow_a_slash():
+    assert units.scope_reasons(SCOPE_MD, {"mytest_b.py": 1}) == ["outside: mytest_b.py"]
+
+
+def test_us24_scope_unit_without_files_makes_every_path_outside():
+    md = "### 1. T (US-24)\nLane: fast\n"
+    assert units.scope_reasons(md, {"a.py": 1}) == ["outside: a.py"]
+
+
+def test_us24_scope_no_estimate_limit_is_30():
+    md = "### 1. T (US-24)\nFiles: `a.py`.\n"
+    assert units.scope_reasons(md, {"a.py": 30}) == []
+    assert units.scope_reasons(md, {"a.py": 31}) == ["size: 31 lines, limit 30"]
+
+
+def test_us24_scope_estimate_doubles_the_limit():
+    md = "### 1. T (US-24)\nEstimate: ~20 lines. Files: `a.py`.\n"
+    assert units.scope_reasons(md, {"a.py": 31}) == []
+    assert units.scope_reasons(md, {"a.py": 41}) == ["size: 41 lines, limit 40"]
+
+
+def test_us24_scope_size_sums_all_files():
+    md = "### 1. T (US-24)\nFiles: `a.py`, `b.py`.\n"
+    assert units.scope_reasons(md, {"a.py": 20, "b.py": 11}) == ["size: 31 lines, limit 30"]
+
+
+def test_us24_scope_both_problems_outside_first():
+    md = "### 1. T (US-24)\nFiles: `a.py`.\n"
+    got = units.scope_reasons(md, {"a.py": 20, "z.py": 11})
+    assert got == ["outside: z.py", "size: 31 lines, limit 30"]

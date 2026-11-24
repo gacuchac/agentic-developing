@@ -5,8 +5,9 @@ disable-model-invocation: true
 ---
 
 Use the codex-reviewer subagent to run pass $0 for .claude/runs/$1/, giving it what that pass needs:
-- `commit`, `principles`, `alternatives`: `--commit $2` (default: HEAD) and `--base dev`.
+- `commit`: `--commit $2` (default: HEAD) and `--base dev`.
+- `principles`, `alternatives`: the whole branch, `--base $2` (default: the task's launch hash, from its build board or the merge-base of dev and HEAD), no `--commit`.
 - `answers-ask`: `--base $2` (default: the task's launch hash, from its build board or the merge-base of dev and HEAD).
 - `pr`: `--base $2` (default: `dev`).
 - `plan`: nothing more.
-Show me its output word for word, then give your own one-line assessment of whether you agree.
+Show me its output word for word, then give your own one-line assessment of whether you agree. Trust the verdict derived from the criterion lines, not the VERDICT line.

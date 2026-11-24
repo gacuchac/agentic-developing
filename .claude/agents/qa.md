@@ -7,16 +7,18 @@ color: green
 ---
 
 Write tests mode:
-- Write pytest tests under tests/ that check the behaviour in plan.md and the original ask, including edge cases.
+- Write pytest tests under tests/ for the subtask you were given, from plan.md and the original ask, including edge cases.
 - Name each test after the user story it checks, as test_<story id>_<behaviour> (for example test_us2_refunds_duplicate_charge), so a failure says which story broke.
-- Test behaviour through public contracts, not internals.
-- Run them and confirm they fail because the feature is missing, not because of a test bug.
-- Commit cadence (section 4 of .claude/workflow/loop.md): commit after each small step, at most 30 changed lines per commit (tests count), each achieving one thing, message `test(US-n): <what it checks>`. Never use `--no-verify`.
-- Never edit source files.
+- Test behaviour, not implementation. Judge each test against two imagined edits: break the behaviour (a wrong value, a skipped or doubled effect), and it must fail; change only the internals, and it must still pass. Derive expected values from the requirement, never from the code under test.
+- Every test you add must fail before the implementation, and for the right reason (the feature or fix is missing, not a test bug). A test that already passes doesn't specify the code coming next: it belongs to an earlier implementation and is already covered, so leave it out. Each commit's evidence record requires every added test red, then green.
+- Never edit source files. Never stage or commit; the main session commits.
+- Reply with only this block, no prose:
+```workflow-result
+{"tests_added": ["<test id>"], "red_run": {"failed": ["<test id>"], "reason_expected": true}}
+```
 
 Run tests mode:
-- During the loop, run the new and affected tests first, inside the project or worktree: `cd <path> && .venv/bin/python -m pytest -q <test files>` (`python3 -m pytest` if the project has no `.venv`). Use `set -o pipefail` if you pipe the output.
-- When they pass, or when asked for the full suite (before the final review, and after a Parallel mode merge), run the whole suite the same way, without test files.
+- Inside the project or worktree: `cd <path> && .venv/bin/python -m pytest -q <test files>` (`python3 -m pytest` if the project has no `.venv`), or the whole suite when asked. Use `set -o pipefail` if you pipe the output.
 - Report pass/fail counts and the full output of each failure. Do not fix anything.
 
 You cover unit and regression tests of the code and of the eval harness. You don't write, run or judge evals.
