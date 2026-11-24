@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -51,3 +52,20 @@ def _decide(event: dict, active: Path, workspace: Path) -> tuple[bool, str]:
     others = [c for p in active.glob("*.json") if (c := claimfiles.read(active, p.name)) and c != claim]
     is_root = claim is not None and os.path.normpath(claim["checkout"]) == str(workspace)
     return path_allowed(event["tool_input"][key], claim, is_root, others, str(workspace))
+
+
+def main(stdin: str, active: Path, workspace: Path) -> int:
+    """Return 2 and print the reason to stderr when the JSON event in `stdin` edits outside its task, else 0.
+
+    Unreadable input allows."""
+    try:
+        allowed, reason = _decide(json.loads(stdin), active, workspace)
+    except Exception:
+        return 0
+    if not allowed:
+        print(reason, file=sys.stderr)
+    return 0 if allowed else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.stdin.read(), WORKSPACE / ".claude" / "runs" / ".active", WORKSPACE))
