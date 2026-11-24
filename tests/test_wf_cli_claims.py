@@ -163,3 +163,15 @@ def test_us22_record_ending_task_releases_claim_and_logs_row(env, monkeypatch):
     assert len(rows) == 1
     assert rows[0][1:5] == ["release", "release", "task done", "s1"]
 
+
+
+def test_us19_start_with_checkout_claims_that_checkout(env, monkeypatch, tmp_path):
+    run, active = env
+    worktree = tmp_path / "wt"
+    _g(tmp_path / "Developing" / "proj", "worktree", "add", "-q", "-b", "feature/wt", str(worktree), "dev")
+    for key, value in _session("s1").items():
+        monkeypatch.setenv(key, value)
+    assert wf.main(["start", str(run), "--plan", "plan.md", "--checkout", str(worktree)]) == 0
+    held = json.loads((active / NAME).read_text())
+    assert Path(held["checkout"]) == worktree.resolve()
+    assert held["branch"] == "feature/wt"
