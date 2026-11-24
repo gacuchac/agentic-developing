@@ -237,3 +237,30 @@ def test_us36_run_pytest_counts_passed_tests_in_a_mixed_run(tmp_path):
     assert res["passed"] == 2
     assert res["code"] == 1
     assert res["failed"] == ["test_mix.py::test_c"]
+
+
+def test_us38_subtract_record_is_the_hook_record():
+    record = checks.subtract_record("abc", ["tests/t.py"], ["tests/t.py::test_a"])
+    assert record == {
+        "kind": "subtract",
+        "sha": "abc",
+        "tests_touched": ["tests/t.py"],
+        "suite_failed": ["tests/t.py::test_a"],
+    }
+
+
+def test_us38_subtract_record_delegates_to_the_hook(monkeypatch):
+    asked = []
+
+    class Stub:
+        @staticmethod
+        def subtract_record(sha, touched, failed):
+            return {"stub": (sha, touched, failed)}
+
+    def fake_hook(name):
+        asked.append(name)
+        return Stub
+
+    monkeypatch.setattr(checks, "_hook", fake_hook)
+    assert checks.subtract_record("abc", ["t.py"], []) == {"stub": ("abc", ["t.py"], [])}
+    assert asked == ["evidence_record"]
