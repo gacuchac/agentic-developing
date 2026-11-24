@@ -39,6 +39,7 @@ class Ctx:
     fix_imports: Callable[[Path, list[str]], None] = _no_fix
     size: Callable[[Path], dict[str, int]] = lambda _repo: {}
     added: Callable[[Path], list[str]] = lambda _repo: []
+    log_text: Callable[[Path, str], str] = lambda _repo, _base: ""
 
 
 Handler = Callable[[dict, Ctx], tuple[str, dict, dict]]
@@ -201,11 +202,21 @@ def _scope(state: dict) -> tuple[str | None, str | None]:
     return (None if base or state["node"] == "impl_review" else state["head"]), base
 
 
+def _review_source(state: dict, ctx: Ctx) -> str:
+    """Return the text a review's quotes are checked against at this node."""
+    if state["node"] == "impl_review":
+        return ctx.diff(ctx.repo)
+    if state["node"] != "answers_ask":
+        return ctx.source(ctx.repo, *_scope(state))
+    log = ctx.run / "decisions.tsv"
+    return ctx.log_text(ctx.repo, state["launch"]) + (log.read_text() if log.is_file() else "")
+
+
 def _judge(name: str, path: Path | None, state: dict, ctx: Ctx) -> dict:
     """Derive one pass's verdict from its saved review; a None path is MALFORMED."""
     if path is None:
         return {"pass": name, "review": None, "verdict": "MALFORMED", "fails": [], "dropped": []}
-    source = ctx.diff(ctx.repo) if state["node"] == "impl_review" else ctx.source(ctx.repo, *_scope(state))
+    source = _review_source(state, ctx)
     text = path.read_text()
     verdict, fails = review.derive_verdict(text, review.expected_ids(name, ctx.repo), source)
     dropped = [] if verdict == "MALFORMED" else review.dropped_fails(text, source)

@@ -37,6 +37,11 @@ def worktree_diff(repo: Path) -> str:
     return out
 
 
+def log_text(repo: Path, base: str) -> str:
+    """Return `git log --stat base..HEAD` in repo."""
+    return _git(repo, "log", "--stat", f"{base}..HEAD")
+
+
 def launch_info(repo: Path) -> tuple[str, str]:
     """Return (current branch, merge-base of HEAD and dev); RuntimeError when there is no dev or HEAD is detached."""
     try:
