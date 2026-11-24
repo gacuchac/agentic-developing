@@ -19,11 +19,24 @@ def _state(node="write_unit", unit=1):
 
 def test_us7_enter_agent_after_a_back_round_numbers_the_step_id():
     s = _state("impl_decide", unit=3)
+    for _ in range(2):
+        s = st.with_entry(s, {"node": "implement", "result": {}, "to": "tests_review"}, "n")
     s = st.with_entry(s, {"node": "impl_decide", "decision": "correct", "to": "implement"}, "n")
     out = engine.enter(s, "implement")
     assert out["node"] == "implement"
     assert out["round"] == 2
-    assert out["pending"] == {"kind": "agent", "agent": "implementer", "step": "code", "step_id": "u3-code-2"}
+    assert out["pending"] == {"kind": "agent", "agent": "implementer", "step": "code", "step_id": "u3-code-3"}
+
+
+def test_us35_enter_agent_step_id_counts_attempts_at_the_node_in_this_unit_only():
+    s = _state("commit_tests", unit=2)
+    s = st.with_entry(s, {"node": "implement", "result": {}, "to": "tests_review"}, "n")
+    s["unit"] = 1
+    s = st.with_entry(s, {"node": "implement", "result": {}, "to": "tests_review"}, "n")
+    s = st.with_entry(s, {"node": "commit_tests", "outcome": "done", "to": "implement"}, "n")
+    out = engine.enter(s, "implement")
+    assert out["round"] == 1
+    assert out["pending"]["step_id"] == "u1-code-2"
 
 
 def test_us7_enter_agent_first_time_is_round_one():

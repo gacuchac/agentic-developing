@@ -61,7 +61,7 @@ def test_us7_advance_third_refused_commit_fix_still_goes_to_implement():
         s = st.with_entry(s, {"node": "commit_fix", "outcome": "refused", "to": "implement"}, "n")
     out = engine.advance(s, CTX, {"commit_fix": _h("refused", {"error": "x"})})
     assert out["node"] == "implement"
-    assert out["pending"]["step_id"] == "u1-code-3"
+    assert out["pending"]["step_id"] == "u1-code-1"
 
 
 def test_us7_advance_malformed_tests_review_goes_to_user():
