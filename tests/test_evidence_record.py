@@ -346,3 +346,43 @@ def test_us34_changed_tests_ignores_changed_helper():
     before = "def helper():\n    return 1\n\ndef test_a():\n    assert helper()\n"
     after = "def helper():\n    return 2\n\ndef test_a():\n    assert helper()\n"
     assert er.changed_tests(before, after, "t.py") == []
+
+
+_HEAD = (
+    "import sys\nfrom pathlib import Path\n"
+    "sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))\n"
+    "from a import f\n\n\n"
+)
+
+
+def _two_test_commits(tmp_path: Path, old_assert: str):
+    repo, run = tmp_path / "repo", tmp_path / "run"
+    repo.mkdir()
+    run.mkdir()
+    _git(repo, "init", "-q")
+    (run / "architecture.md").write_text("Status: approved\n")
+    (run / "unit.md").write_text("# unit\n")
+    base = _HEAD + "def test_old():\n    assert f() >= 1\n"
+    _commit(repo, "US-1: base", {"src/a.py": "def f():\n    return 1\n", "tests/test_a.py": base})
+    first = _commit(repo, "test(US-1): new", {"tests/test_a.py": base + "\n\ndef test_new():\n    assert f() == 2\n"})
+    edited = _HEAD + f"def test_old():\n    assert {old_assert}\n\n\ndef test_new():\n    assert f() == 2\n"
+    _commit(repo, "test(US-1): fix review findings", {"tests/test_a.py": edited})
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f():\n    return 2\n"})
+    return er.measure(repo, run, fix, Path(sys.executable), tests_commit=first)
+
+
+def test_us34_measure_changed_test_that_fails_before_the_unit_is_added_red_and_complete(tmp_path):
+    rec = _two_test_commits(tmp_path, "f() == 2")
+    both = ["tests/test_a.py::test_new", "tests/test_a.py::test_old"]
+    assert sorted(rec["added"]) == both
+    assert sorted(rec["red"]) == both
+    assert sorted(rec["green"]) == both
+    assert er.complete(rec) is True
+
+
+def test_us34_measure_changed_test_that_already_passed_is_not_red_and_incomplete(tmp_path):
+    rec = _two_test_commits(tmp_path, "f() > 0")
+    assert "tests/test_a.py::test_old" in rec["added"]
+    assert "tests/test_a.py::test_old" not in rec["red"]
+    assert "tests/test_a.py::test_new" in rec["red"]
+    assert er.complete(rec) is False
