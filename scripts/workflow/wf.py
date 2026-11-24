@@ -210,6 +210,11 @@ def run_release(run: Path, reason: str, env: Mapping[str, str], ctx: Ctx) -> lis
     return []
 
 
+def _release_done(run: Path, ctx: Ctx) -> None:
+    held = claims.release(run.parents[1] / ".active", claims.claim_name(run.parent.name, run.name))
+    ctx.log(run, [ctx.now(), "release", "release", "task done", (held or {}).get("session", ""), ""])
+
+
 def run_claim(run: Path, env: Mapping[str, str], ctx: Ctx) -> list[str]:
     """Claim the run's task for the session in env; return [] or one error line naming the live holder.
 
@@ -310,6 +315,8 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(errors), file=sys.stderr)
         return 1
     st.save(args.run, state)
+    if state["node"] == "done" and args.cmd != "start":
+        _release_done(args.run, ctx)
     print(status_text(state))
     return 0
 
