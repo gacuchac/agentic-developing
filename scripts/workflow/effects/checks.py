@@ -55,21 +55,16 @@ def fix_imports(repo: Path, paths: list[str]) -> None:
         )
 
 
-def _commit_cap() -> object:
-    path = Path(__file__).resolve().parents[2] / "hooks" / "commit_cap.py"
-    spec = importlib.util.spec_from_file_location("commit_cap", path)
+def _hook(name: str) -> object:
+    path = Path(__file__).resolve().parents[2] / "hooks" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def change_size(repo: Path) -> dict[str, int]:
-    """Return the changed lines per file of repo's uncommitted changes against HEAD, untracked files included.
-
-    Counted with the rules of scripts/hooks/commit_cap.py: deleted, test, document and skill files and files
-    counting 0 are left out. The repo's own index is not touched.
-    """
-    cap = _commit_cap()
+def _pending_diffs(repo: Path, *flags: str) -> list[str]:
+    """Return `git diff --cached -M <flag> HEAD` per flag, with untracked files added to a copy of the index."""
     with tempfile.TemporaryDirectory() as tmp:
         index = Path(tmp) / "index"
         real_index = Path(subprocess.run(
@@ -84,7 +79,26 @@ def change_size(repo: Path) -> dict[str, int]:
             return subprocess.run(["git", *args], cwd=repo, env=env, capture_output=True, text=True, check=True).stdout
 
         git("add", "-A")
-        numstat, name_status = (git("diff", "--cached", flag, "-M", "HEAD") for flag in ("--numstat", "--name-status"))
+        return [git("diff", "--cached", *([flag] if flag else []), "-M", "HEAD") for flag in flags]
+
+
+def added_tests(repo: Path) -> list[str]:
+    """Return the ids (`<path>::<name>`) of the test functions repo's uncommitted changes add against HEAD.
+
+    Untracked test files are included. The repo's own index is not touched.
+    """
+    (diff,) = _pending_diffs(repo, "")
+    return _hook("evidence_record").added_tests(diff)
+
+
+def change_size(repo: Path) -> dict[str, int]:
+    """Return the changed lines per file of repo's uncommitted changes against HEAD, untracked files included.
+
+    Counted with the rules of scripts/hooks/commit_cap.py: deleted, test, document and skill files and files
+    counting 0 are left out. The repo's own index is not touched.
+    """
+    cap = _hook("commit_cap")
+    numstat, name_status = _pending_diffs(repo, "--numstat", "--name-status")
     counts = cap.without_deleted_files(cap.file_counts(numstat), name_status)
     counts = cap.without_skill_files(cap.without_doc_files(cap.without_test_files(counts)))
     return {path: n for path, n in counts.items() if n}

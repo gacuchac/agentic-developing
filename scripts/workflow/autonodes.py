@@ -38,6 +38,7 @@ class Ctx:
     now: Callable[[], str]
     fix_imports: Callable[[Path, list[str]], None] = _no_fix
     size: Callable[[Path], dict[str, int]] = lambda _repo: {}
+    added: Callable[[Path], list[str]] = lambda _repo: []
 
 
 Handler = Callable[[dict, Ctx], tuple[str, dict, dict]]
@@ -88,10 +89,11 @@ def _red_run(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     qa = _result(state, "qa_write")
     added = qa["tests_added"]
     failed = ctx.tests(ctx.repo, added)["failed"]
-    red = {"tests": added, "failed": failed, "claimed": qa["red_run"]}
+    not_red = [t for t in ctx.added(ctx.repo) if not _is_red(t, failed)]
+    red = {"tests": added, "failed": failed, "claimed": qa["red_run"], "not_red": not_red}
     (ctx.run / "red.json").write_text(json.dumps(red))
     covered = bool(added) and all(_is_red(t, failed) for t in added)
-    return ("expected" if covered and qa["red_run"]["reason_expected"] else "unexpected"), red, state
+    return ("expected" if covered and not not_red and qa["red_run"]["reason_expected"] else "unexpected"), red, state
 
 
 def _verify(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
