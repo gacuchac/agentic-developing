@@ -6,7 +6,7 @@ HEADER = "ts\tphase\tdecision\twhy\tevidence\tresult"
 def row(entry: dict) -> list[str]:
     """Map a history entry to the six decision-log columns: ts, phase, decision, why, evidence, result."""
     ev = entry.get("evidence") or {}
-    findings = ev.get("findings", [])
+    findings = [f if isinstance(f, dict) else {"id": f} for f in ev.get("findings", [])]
     why = [str(f["quote"]) for f in findings if f.get("quote")]
     why = [*ev.get("reasons", []), *why] or [entry.get("message", "")]
     refs = [f"{f['file']}:{f['line']}" if f.get("file") else str(f.get("id", "")) for f in findings]
