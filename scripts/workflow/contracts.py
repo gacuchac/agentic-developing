@@ -24,7 +24,6 @@ def changed_signatures(diff: str) -> set[str]:
 
 def uncovered(names: set[str], architecture: str) -> set[str]:
     """Return `names` unless `architecture` has a "Status: approved" line, else those it never mentions."""
-    lines = architecture.lower().splitlines()
-    if not any("status:" in x and "approved" in x for x in lines):
+    if not re.search(r"\bstatus:\s*approved\b", re.sub(r"[*_]", "", architecture), re.I):
         return set(names)
     return {n for n in names if not re.search(rf"\b{n}\b", architecture)}
