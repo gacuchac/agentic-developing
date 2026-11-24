@@ -1,5 +1,8 @@
 """Pure engine of the unit loop: moves the state between nodes."""
+
 from __future__ import annotations
+
+from pathlib import Path
 
 import graph
 import state as st
@@ -46,3 +49,23 @@ def advance(state: dict, ctx: Ctx, handlers: dict = HANDLERS) -> dict:
         logged = {"node": node, "outcome": outcome, **entry, "to": target}
         state = st.with_entry(enter(state, target, reason), logged, ctx.now())
     return state
+
+
+def _last(history: list[dict], key: str) -> dict:
+    return next((e for e in reversed(history) if key in e), {})
+
+
+def _finding_facts(history: list[dict]) -> dict:
+    passes = {i: r["pass"] for r in _last(history, "reviews").get("reviews", []) for i in r["fails"]}
+    spent = {p for p, n in graph.wrong_dismissals(history).items() if n >= graph.WRONG_CAP}
+    return {"fails": list(passes), "passes": passes, "capped": [i for i, p in passes.items() if p in spent]}
+
+
+def _failures(state: dict, history: list[dict]) -> list[str]:
+    entry = _last(history, "failed")
+    extra = {"fail_decide": entry.get("disputed", []), "red_decide": entry.get("tests", [])}
+    return [*entry.get("failed", []), *extra.get(state["node"], [])]
+
+
+def _docs(state: dict, run: Path) -> list[str]:
+    return [(run / n).read_text() for n in (state["plan"], "ask.md") if (run / n).is_file()]
