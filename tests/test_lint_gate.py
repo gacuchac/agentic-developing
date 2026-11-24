@@ -10,7 +10,7 @@ _spec = importlib.util.spec_from_file_location("lint_gate", _path)
 gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gate)
 
-CLEAN = "def add(a: int, b: int) -> int:\n    return a + b\n"
+CLEAN = 'def add(a: int, b: int) -> int:\n    """Sum."""\n    return a + b\n'
 SLOP = "ITEMS = []\n\n\ndef add(x):\n    ITEMS.append(x)\n"
 RUFF_ERROR = "import os\n\n\ndef f() -> int:\n    return 1\n"
 
@@ -191,3 +191,26 @@ def test_us29_slop_failed_skips_a_source_with_a_tokenize_error(monkeypatch):
 def test_us29_slop_failed_skips_a_source_with_a_syntax_error(monkeypatch):
     monkeypatch.setattr(gate, "check_source", _raiser(SyntaxError("bad")))
     assert gate.slop_failed({"blob.py": "x"}) is False
+
+
+UNANNOTATED = 'def add(a, b):\n    """Sum."""\n    return a + b\n'
+BROAD_EXCEPT = (
+    "def safe(a: int) -> str:\n"
+    '    """Divide."""\n'
+    "    try:\n"
+    "        return str(1 // a)\n"
+    "    except Exception as exc:\n"
+    "        return str(exc)\n"
+)
+
+
+def test_us37_gate_blocks_a_missing_annotation_in_a_repo_without_ruff_config(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _stage(repo, "pkg/m.py", UNANNOTATED)
+    assert _gate(repo, monkeypatch) == 1
+
+
+def test_us37_gate_does_not_apply_ble001_in_a_repo_without_ruff_config(tmp_path, monkeypatch):
+    repo = _repo(tmp_path)
+    _stage(repo, "pkg/m.py", BROAD_EXCEPT)
+    assert _gate(repo, monkeypatch) == 0
