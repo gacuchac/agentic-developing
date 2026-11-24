@@ -140,7 +140,6 @@ def _commit(state: dict, ctx: Ctx, message: str, paths: list[str] | None) -> tup
         sha = _made_already(state, ctx, message)
         if sha is None:
             return "refused", {"message": message, "error": str(err)}, state
-    ctx.log(ctx.run, [sha, message])
     return "done", {"sha": sha, "message": message}, {**state, "head": sha}
 
 

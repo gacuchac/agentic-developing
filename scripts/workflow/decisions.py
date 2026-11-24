@@ -8,7 +8,9 @@ def row(entry: dict) -> list[str]:
     ev = entry.get("evidence") or {}
     findings = [f if isinstance(f, dict) else {"id": f} for f in ev.get("findings", [])]
     why = [str(f["quote"]) for f in findings if f.get("quote")]
-    why = [*ev.get("reasons", []), *why] or [entry.get("message", "")]
+    said = [f"{f.get('id', '')}: {f['reason']}" for f in findings if f.get("reason")]
+    said += [str(ev[k]) for k in ("quote", "question") if ev.get(k)]
+    why = [*said, *ev.get("reasons", []), *why] or [entry.get("message", "")]
     refs = [f"{f['file']}:{f['line']}" if f.get("file") else str(f.get("id", "")) for f in findings]
     refs += [*ev.get("tests", []), *filter(None, [entry.get("sha"), ev.get("path")])]
     return [
