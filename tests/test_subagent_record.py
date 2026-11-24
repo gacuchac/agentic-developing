@@ -361,3 +361,74 @@ def test_us21_transcript_text_block_found_and_later_handback_block_wins(hook, tm
     _write_transcript(transcript, run, text, _record("assistant", _handback(OTHER)))
     assert hook.main(_silent_event(transcript), active, rec) == 0
     assert rec.calls[1:] == [(run, "u3-write-1", OTHER)]
+
+
+def _log_lines(active: Path) -> list[dict]:
+    log = active / "recorder.log"
+    return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+
+
+def test_us30_logs_recorded_outcome(hook, tmp_path):
+    active, run = _setup(tmp_path)
+    message = _block(json.dumps(RESULT))
+
+    code = hook.main(_event(message), active, lambda r, s, x: [])
+
+    lines = _log_lines(active)
+    assert code == 0
+    assert len(lines) == 1
+    assert lines[0]["outcome"] == "recorded"
+    assert lines[0]["step"] == [str(run), "u3-write-1"]
+    assert lines[0]["result"] is True
+    assert lines[0]["agent_id"] == "a1"
+    assert lines[0]["agent_type"] == "qa"
+    assert lines[0]["session"] == "s1"
+    assert lines[0]["transcript"] is False
+
+
+def test_us30_logs_no_step_without_registry_entry(hook, tmp_path):
+    active = tmp_path / "active"
+    active.mkdir()
+
+    hook.main(_event(_block(json.dumps(RESULT)), agent_id="ghost"), active, lambda r, s, x: [])
+
+    lines = _log_lines(active)
+    assert len(lines) == 1
+    assert lines[0]["outcome"] == "no step"
+    assert lines[0]["step"] is None
+
+
+def test_us30_logs_no_result_when_no_block(hook, tmp_path):
+    active, run = _setup(tmp_path)
+
+    hook.main(_event("all done, no block"), active, lambda r, s, x: [])
+
+    lines = _log_lines(active)
+    assert len(lines) == 1
+    assert lines[0]["outcome"] == "no result"
+    assert lines[0]["step"] == [str(run), "u3-write-1"]
+    assert lines[0]["result"] is False
+
+
+def test_us30_logs_refused_and_still_returns_2(hook, tmp_path):
+    active, _ = _setup(tmp_path)
+
+    code = hook.main(_event(_block(json.dumps(RESULT))), active, lambda r, s, x: ["bad result"])
+
+    lines = _log_lines(active)
+    assert code == 2
+    assert len(lines) == 1
+    assert lines[0]["outcome"] == "refused"
+    assert lines[0]["result"] is True
+
+
+def test_us30_logs_bad_input_and_returns_0(hook, tmp_path):
+    active = tmp_path / "active"
+    active.mkdir()
+
+    code = hook.main("not json {", active, lambda r, s, x: [])
+
+    lines = _log_lines(active)
+    assert code == 0
+    assert len(lines) == 1
+    assert lines[0]["outcome"] == "bad input"
