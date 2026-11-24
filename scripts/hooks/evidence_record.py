@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib.util
 import json
 import os
@@ -27,6 +28,24 @@ def added_tests(diff: str) -> list[str]:
         elif (match := _TEST_DEF.match(line)) and "tests" in path.split("/")[:-1]:
             found.append(f"{path}::{match.group(1)}")
     return found
+
+
+def _test_sources(source: str) -> dict[str, str]:
+    tree = ast.parse(source)
+    return {
+        n.name: ast.get_source_segment(source, n) or ""
+        for n in tree.body
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name.startswith("test")
+    }
+
+
+def changed_tests(before: str | None, after: str, path: str) -> list[str]:
+    """Return `path::name` of each top-level test function in `after` that is new or edited.
+
+    `before` None means every test is new. Order is as in `after`.
+    """
+    old = _test_sources(before) if before is not None else {}
+    return [f"{path}::{name}" for name, text in _test_sources(after).items() if old.get(name) != text]
 
 
 def failing_fields(record: dict) -> list[str]:
