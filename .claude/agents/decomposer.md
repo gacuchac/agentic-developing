@@ -17,7 +17,9 @@ How you expect to solve the task, in a few sentences.
 ### <n>. <title> (US-n)
 Lane: fast|full
 Breaks: <test ids this subtask is allowed to leave failing, if any, inside a plan the user approved>
-Files touched, function contracts touched (name, inputs, outputs), tests needed.
+Estimate: ~<n> lines. Files: every file the subtask may touch, each in backticks.
+Contracts: each function contract touched (name, inputs, outputs).
+Tests: the cases qa writes. Name only cases that fail before the code exists; a case that already passes proves nothing about this subtask.
 Done when: one checkable line tied to that story.
 ## Files and functions
 Every file you expect to touch, and in each, every function you'll add or change, as <file>:<function>.
@@ -30,7 +32,7 @@ Evals flag: yes or no. Yes if the task changes LLM or agent behaviour (prompts, 
 ## Open questions
 Every ambiguity you would otherwise have to guess, with the options you see. Don't guess; list it here.
 
-Keep subtasks small enough that each is clearly specified for a Sonnet-class implementer, and give each one goal, so it is delivered as one test commit and one implementation commit.
+Keep subtasks small enough that each is clearly specified for a Sonnet-class implementer, and give each one goal, so it is delivered as one test commit and one implementation commit. The `Files:` and `Estimate:` lines are checked: an implementation that touches a code file the subtask doesn't name, or is over the larger of 30 lines and twice the estimate, is read by a reviewer before it is committed.
 Give each subtask a `Lane: fast` or `Lane: full` line. Full: it changes a public contract, a schema or migration, a risky seam (auth, network, an external service, deploy configuration) or security. Everything else is fast.
 
 If the main orchestrator sends you clashes with other plans, you get your plan, the other plans and each clash. Revise your plan so the clashes go away without changing the other tasks, and add a section "## Changes since last round" saying what you changed and why. If a clash can't go away without changing a contract, say so there instead.
