@@ -32,7 +32,7 @@ Evals flag: yes or no. Yes if the task changes LLM or agent behaviour (prompts, 
 ## Open questions
 Every ambiguity you would otherwise have to guess, with the options you see. Don't guess; list it here.
 
-Keep subtasks small enough that each is clearly specified for a Sonnet-class implementer, and give each one goal, so it is delivered as one test commit and one implementation commit. The `Files:` and `Estimate:` lines are checked: an implementation that touches a code file the subtask doesn't name, or is over the larger of 30 lines and twice the estimate, is read by a reviewer before it is committed.
+Keep subtasks small enough that each is clearly specified for a Sonnet-class implementer, and give each one goal (a merged unit's goal covers the stories its heading names), so it is delivered as one test commit and one implementation commit. The `Files:` and `Estimate:` lines are checked: an implementation that touches a code file the subtask doesn't name, or is over the larger of 30 lines and twice the estimate, is read by a reviewer before it is committed.
 Don't split finer than that. Every unit costs its own test commit, implementation commit and reviews, so merge neighbouring subtasks in the same lane until each is at least about 40 lines. A merged unit's heading names every story it delivers, as `(US-1, US-2)`; its `Files:` line is the union of theirs and its `Estimate:` the sum. Never merge subtasks in different lanes.
 Give each subtask a `Lane: fast` or `Lane: full` line. Full: it changes a public contract, a schema or migration, a risky seam (auth, network, an external service, deploy configuration) or security. Everything else is fast.
 
