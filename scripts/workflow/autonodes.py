@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import review
 import units
 
 
@@ -95,9 +96,32 @@ def _verify(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     return ("fail" if stray or hit or disputed else units.unit_lane(unit)), entry, state
 
 
+def _commit(state: dict, ctx: Ctx, message: str, paths: list[str] | None) -> tuple[str, dict, dict]:
+    try:
+        sha = ctx.commit(ctx.repo, message, paths)
+    except RuntimeError as err:
+        return "refused", {"message": message, "error": str(err)}, state
+    ctx.log(ctx.run, [sha, message])
+    return "done", {"sha": sha, "message": message}, {**state, "head": sha}
+
+
+def _commit_tests(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
+    """Commit only the touched test paths and start their `tests` review; `refused` if none or a hook fails."""
+    message = units.test_commit_message((ctx.run / "unit.md").read_text())
+    paths = ctx.touched(ctx.repo)
+    if not paths:
+        return "refused", {"message": message, "error": "no test paths to commit"}, state
+    outcome, entry, new = _commit(state, ctx, message, paths)
+    if outcome == "done":
+        args = review.review_args("tests", ctx.run, state["plan"], entry["sha"], None)
+        new = {**new, "review": ctx.start_review(args, ctx.repo, ctx.run / f"review-tests-{entry['sha']}.log")}
+    return outcome, entry, new
+
+
 HANDLERS: dict[str, Handler] = {
     "write_unit": _write_unit,
     "next_unit": _next_unit,
     "red_run": _red_run,
     "verify": _verify,
+    "commit_tests": _commit_tests,
 }
