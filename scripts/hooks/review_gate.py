@@ -88,7 +88,12 @@ def _git(*args: str) -> str:
 
 
 def main(workspace: Path = WORKSPACE) -> int:
-    """Return 1 and print a blocking message when HEAD of the current task branch has no saved review, else 0."""
+    """Return 1 and print a blocking message when HEAD of the current task branch has no saved review, else 0.
+
+    A repo with no commits returns 0.
+    """
+    if subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], capture_output=True, check=False).returncode:
+        return 0
     branch = _git("rev-parse", "--abbrev-ref", "HEAD")
     task = task_id(branch)
     if task is None or not needs_review(Path.cwd()) or nothing_to_review(Path.cwd()):
