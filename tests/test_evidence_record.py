@@ -230,3 +230,22 @@ def test_us9_is_failed_longer_name_does_not_count():
 
 def test_us9_is_failed_empty_failed_list_is_false():
     assert er.is_failed("tests/a.py::test_x", []) is False
+
+
+def test_us9_is_failed_file_level_id_counts_for_its_tests():
+    assert er.is_failed("tests/a.py::test_x", ["tests/a.py"]) is True
+
+
+def test_us9_measure_collection_error_at_test_commit_counts_as_red(tmp_path):
+    repo, run, _ = _repo(tmp_path, with_tests=False)
+    test_c = (
+        "import sys\nfrom pathlib import Path\n"
+        "sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))\n"
+        "from newmod import g\n\n\ndef test_c():\n    assert g() == 5\n"
+    )
+    _commit(repo, "test(US-1): new test", {"tests/test_c.py": test_c})
+    fix = _commit(repo, "US-1: add module", {"src/newmod.py": "def g():\n    return 5\n"})
+    rec = _measure(repo, run, fix)
+    assert rec["added"] == ["tests/test_c.py::test_c"]
+    assert rec["red"] == rec["added"]
+    assert er.complete(rec) is True
