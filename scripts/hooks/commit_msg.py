@@ -7,7 +7,8 @@ import re
 import sys
 from pathlib import Path
 
-SUBJECT = re.compile(r"(US-\d+|test\(US-\d+\)|X\d+)( \(\d+/\d+\))?: \S")
+_STORIES = r"US-\d+(?:, US-\d+)*"
+SUBJECT = re.compile(rf"({_STORIES}|test\({_STORIES}\)|X\d+)( \(\d+/\d+\))?: \S")
 
 
 def valid_subject(subject: str) -> bool:
