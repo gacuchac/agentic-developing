@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import re
 from pathlib import Path
 
@@ -11,6 +12,15 @@ from scripts.workflow.evidence import quote_in
 def rubric_ids(rubric: str) -> list[str]:
     """Return the ids of the rubric lines shaped `- C1. ...`, in file order."""
     return re.findall(r"^- ([A-Z]\d+)\. ", rubric, re.MULTILINE)
+
+
+def expected_ids(pass_name: str, repo: Path) -> list[str]:
+    """Return the rubric ids of the pass's rubric: the repo's own, else the workspace's."""
+    path = Path(__file__).resolve().parents[1] / "codex_review.py"
+    spec = importlib.util.spec_from_file_location("codex_review", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return rubric_ids(module.pass_prompt_path(pass_name, repo).read_text())
 
 
 def parse_criteria(review: str) -> dict[str, str]:
@@ -55,7 +65,11 @@ def review_args(pass_name: str, run: Path, plan: str, commit: str | None, base: 
     for impl (a missing file is harmless), --commit when commit is given, --base when base is given.
     Paths are str."""
     args = [pass_name, "--ask-file", str(run / "ask.md"), "--plan-file", str(run / plan), "--run-dir", str(run)]
-    context = {"tests": ["unit.md"], "impl": ["unit.md", "architecture.md"]}.get(pass_name, [])
+    context = {
+        "tests": ["unit.md", "red.json"],
+        "impl": ["unit.md", "architecture.md"],
+        "answers-ask": ["decisions.tsv"],
+    }.get(pass_name, [])
     for name in context:
         args += ["--context-file", str(run / name)]
     if commit:
