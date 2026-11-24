@@ -106,6 +106,13 @@ def _fix_section(history: list[dict]) -> str:
     return "\n\nWhat to fix\n" + "\n".join(lines) + "\n" if lines else ""
 
 
+def _with_plan_and_python(prompt: str, state: dict, ctx: Ctx) -> str:
+    extra = f"Plan: {ctx.run / state['plan']}\nPython: {ctx.python}\n"
+    head, sep, tail = prompt.partition("\nRun folder:")
+    line, nl, rest = tail.partition("\n")
+    return f"{head}{sep}{line}{nl}{extra}{rest}"
+
+
 def _launch(state: dict, ctx: Ctx) -> dict:
     pending = state["pending"]
     agent, step, step_id = pending["agent"], pending["step"], pending["step_id"]
@@ -121,6 +128,7 @@ def _launch(state: dict, ctx: Ctx) -> dict:
         file.read_text() if file.is_file() else None,
     )
     error = (state["history"] or [{}])[-1].get("error", "")
+    prompt = _with_plan_and_python(prompt, state, ctx)
     prompt += _fix_section(state["history"]) + error
     return {"id": "launch", "kind": "agent", "agent": agent, "step_id": step_id, "prompt": prompt}
 

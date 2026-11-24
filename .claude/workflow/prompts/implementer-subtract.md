@@ -11,7 +11,7 @@ The last unit of the plan, for context only:
 {unit}
 
 Rules:
-- Work only inside the repo above. Keep every public contract and its docstring. Never edit files under `tests/`.
+- Work only inside the repo above. Before starting, read the Approach and Contracts sections of the plan on the `Plan:` line: they hold decisions that apply to every unit. Run tests with the interpreter on the `Python:` line (`<Python> -m pytest -q`) in place of any `.venv` or `python3` rule. Keep every public contract and its docstring. Never edit files under `tests/`.
 - If nothing is worth removing, change nothing.
 - After any edit the whole suite must pass, and `ruff check --config ~/Developing/ruff.toml <changed files>` and `python3 ~/Developing/scripts/hooks/slop_checks.py <changed .py files>` must be clean.
 - Do not stage or commit.

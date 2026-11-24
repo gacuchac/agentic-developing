@@ -9,7 +9,7 @@ Write the failing tests for this unit, and nothing else.
 {unit}
 
 Rules:
-- Work only inside the repo above. Run tests from it with `.venv/bin/python -m pytest -q` when it has a `.venv`, else `python3 -m pytest -q`.
+- Work only inside the repo above. Before starting, read the Approach and Contracts sections of the plan on the `Plan:` line: they hold decisions that apply to every unit. Run tests with the interpreter on the `Python:` line (`<Python> -m pytest -q`) in place of any `.venv` or `python3` rule.
 - Every test you add must fail now, before the code exists, and for the expected reason. Leave out a case that already passes, and list each one in `left_out`.
 - Follow the unit's file and naming lines, and import the code the way the repo's existing tests do.
 - Before you finish, `ruff check --config ~/Developing/ruff.toml <your test files>` must pass.
