@@ -5,9 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import contracts
+import decisions
 import graph
 import state as st
 from autonodes import HANDLERS, Ctx
+from evidence import check_evidence
 
 
 def _pending(state: dict, node: str, round_: int, reason: str) -> dict:
@@ -119,3 +121,24 @@ def _entry(state: dict, option: str, evidence: dict, facts: dict) -> dict:
         entry["passes"] = {f["id"]: facts["passes"][f["id"]] for f in evidence["findings"]}
         to = node if graph.undismissed([*st.unit_history(state), entry], node, facts["fails"]) else to
     return {**entry, "to": to}
+
+
+def take(state: dict, option: str, evidence: dict, ctx: Ctx, handlers: dict = HANDLERS) -> tuple[dict, list[str]]:
+    """Record the decision `option` with its `evidence`, enter the target node and advance.
+
+    Returns (new state, []) when accepted. Returns (state unchanged, errors) when the pending step is
+    not decide or user, the option is not in `legal`, or `check_evidence` finds errors.
+    Appends {"node", "decision", "evidence", "to"} to the history, plus "passes" for overstated and wrong
+    (the task stays at the node while findings are undismissed) and "by": "user" for user_continue.
+    A target of write_unit raises `fix` by 1. Calls ctx.log once per accepted decision.
+    """
+    facts = decision_facts(state, ctx)
+    errors = _refusal(state, option, ctx) or check_evidence(option, evidence, facts)
+    if errors:
+        return state, errors
+    entry = _entry(state, option, evidence, facts)
+    out = st.with_entry(state, entry, ctx.now())
+    ctx.log(ctx.run, decisions.row(out["history"][-1]))
+    out = {**out, "fix": out["fix"] + (entry["to"] == "write_unit")}
+    reason = str(evidence.get("question", evidence.get("path", "")))
+    return advance(enter(out, entry["to"], reason), ctx, handlers), []
