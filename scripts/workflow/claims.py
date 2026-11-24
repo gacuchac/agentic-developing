@@ -37,6 +37,21 @@ def _replace(active: Path, name: str, claim: dict) -> None:
     claimfiles.create(active, name, claim)
 
 
+def release(active: Path, name: str) -> dict | None:
+    """Remove the claim `name` from `active`; return what it held, or None when there was no claim."""
+    held = claimfiles.read(active, name)
+    claimfiles.remove(active, name)
+    return held
+
+
+def release_session(active: Path, session: str) -> list[str]:
+    """Remove every claim in `active` held by `session`; return the names removed."""
+    names = claimfiles.owned_by(active, session)
+    for name in names:
+        claimfiles.remove(active, name)
+    return names
+
+
 def acquire(
     active: Path,
     name: str,
