@@ -133,13 +133,14 @@ def _made_already(state: dict, ctx: Ctx, message: str) -> str | None:
     return sha if resumable else None
 
 
-def _commit(state: dict, ctx: Ctx, message: str, paths: list[str] | None) -> tuple[str, dict, dict]:
+def _commit(state: dict, ctx: Ctx, node: str, message: str, paths: list[str] | None) -> tuple[str, dict, dict]:
     try:
         sha = ctx.commit(ctx.repo, message, paths)
     except RuntimeError as err:
         sha = _made_already(state, ctx, message)
         if sha is None:
             return "refused", {"message": message, "error": str(err)}, state
+    ctx.log(ctx.run, [ctx.now(), f"u{st.unit_label(state)} {node}", "commit", message.splitlines()[0], sha, ""])
     return "done", {"sha": sha, "message": message}, {**state, "head": sha}
 
 
@@ -150,15 +151,15 @@ def _commit_tests(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     if not paths:
         return "refused", {"message": message, "error": "no test paths to commit"}, state
     ctx.fix_imports(ctx.repo, paths)
-    outcome, entry, new = _commit(state, ctx, message, paths)
+    outcome, entry, new = _commit(state, ctx, "commit_tests", message, paths)
     if outcome == "done":
         args = review.review_args("tests", ctx.run, state["plan"], entry["sha"], None)
         new = {**new, "review": ctx.start_review(args, ctx.repo, ctx.run / f"review-tests-{entry['sha']}.log")}
     return outcome, entry, new
 
 
-def _commit_all(state: dict, ctx: Ctx, message: str, tests_commit: str | None) -> tuple[str, dict, dict]:
-    outcome, entry, new = _commit(state, ctx, message, None)
+def _commit_all(state: dict, ctx: Ctx, node: str, message: str, tests_commit: str | None) -> tuple[str, dict, dict]:
+    outcome, entry, new = _commit(state, ctx, node, message, None)
     if outcome == "done":
         path = ctx.run / f"evidence-{entry['sha']}.json"
         path.write_text(json.dumps(ctx.evidence(ctx.repo, ctx.run, entry["sha"], ctx.python, tests_commit)))
@@ -170,7 +171,7 @@ def _commit_fix(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     """Commit everything with the unit's message and record its evidence; `refused` with the error if a hook fails."""
     done = (e for e in st.unit_history(state) if e.get("node") == "commit_tests" and e.get("outcome") == "done")
     first = next((e["sha"] for e in done), None)
-    return _commit_all(state, ctx, units.commit_message((ctx.run / "unit.md").read_text()), first)
+    return _commit_all(state, ctx, "commit_fix", units.commit_message((ctx.run / "unit.md").read_text()), first)
 
 
 def _subtract_check(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
@@ -191,7 +192,8 @@ def _full_suite(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
 def _commit_subtract(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     """Commit everything as `<stories>: Subtract: <summary>` and record evidence; `refused` if a hook fails."""
     stories = units.commit_message((ctx.run / "unit.md").read_text()).split(": ", 1)[0]
-    return _commit_all(state, ctx, f"{stories}: Subtract: {_result(state, 'subtract')['removed']}", None)
+    message = f"{stories}: Subtract: {_result(state, 'subtract')['removed']}"
+    return _commit_all(state, ctx, "commit_subtract", message, None)
 
 
 def _scope(state: dict) -> tuple[str | None, str | None]:
