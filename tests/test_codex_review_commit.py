@@ -188,7 +188,7 @@ def test_us3_main_reviews_a_non_head_commit_inside_a_worktree(tmp_path):
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     run = subprocess.run(
         [sys.executable, str(_path), "commit", "--commit", second, "--ask-file", str(ask),
-         "--plan-file", str(plan), "--run-dir", str(run_dir)],
+         "--plan-file", str(plan), "--run-dir", str(run_dir), "--model", "stub-model"],
         cwd=repo,
         env=env,
         capture_output=True,
