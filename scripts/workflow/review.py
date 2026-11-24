@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from scripts.workflow.evidence import quote_in
+
 
 def rubric_ids(rubric: str) -> list[str]:
     """Return the ids of the rubric lines shaped `- C1. ...`, in file order."""
@@ -20,14 +22,30 @@ def parse_criteria(review: str) -> dict[str, str]:
     return found
 
 
-def derive_verdict(review: str, expected: list[str]) -> tuple[str, list[str]]:
+def dropped_fails(review: str, source: str) -> list[str]:
+    """Return the FAIL ids, in review order, whose criterion text (its line and the lines
+    up to the next criterion) has no backticked span found in source. An id with a
+    quoted FAIL is kept."""
+    blocks = re.split(r"\n(?=\s*(?:- )?\**[A-Z]\d+\**:)", review)
+    quoted: dict[str, bool] = {}
+    for block in blocks:
+        for cid, word in parse_criteria(block).items():
+            if word == "FAIL":
+                spans = re.findall(r"`([^`]+)`", block)
+                quoted[cid] = quoted.get(cid, False) or any(quote_in([source], s) for s in spans)
+    return [cid for cid, ok in quoted.items() if not ok]
+
+
+def derive_verdict(review: str, expected: list[str], source: str | None = None) -> tuple[str, list[str]]:
     """Return ("MALFORMED", []) if expected is empty or an id is missing, else
     ("CHANGES", fail ids in expected order) if any FAIL, else ("PASS", []).
+    Given a source, FAILs from dropped_fails(review, source) do not count.
     The VERDICT line is never read."""
     found = parse_criteria(review)
     if not expected or any(i not in found for i in expected):
         return "MALFORMED", []
-    fails = [i for i in expected if found[i] == "FAIL"]
+    dropped = dropped_fails(review, source) if source is not None else []
+    fails = [i for i in expected if found[i] == "FAIL" and i not in dropped]
     return ("CHANGES", fails) if fails else ("PASS", [])
 
 
