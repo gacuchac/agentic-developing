@@ -143,3 +143,23 @@ def test_us19_take_claims_with_stored_worktree_as_checkout(env, monkeypatch, tmp
     wf.main(["take", str(run), "anything"])
     held = json.loads((active / NAME).read_text())
     assert Path(held["checkout"]).resolve() == worktree.resolve()
+
+
+def _record_to(monkeypatch, run: Path, node: str) -> None:
+    result = run / "result.json"
+    result.write_text("{}")
+    monkeypatch.setattr(wf.engine, "record", lambda state, _step, _res, _ctx: ({**state, "node": node}, []))
+    for key, value in _session("s1").items():
+        monkeypatch.setenv(key, value)
+
+
+def test_us22_record_ending_task_releases_claim_and_logs_row(env, monkeypatch):
+    run, active = env
+    assert wf.main(["start", str(run), "--plan", "plan.md"]) == 0
+    _record_to(monkeypatch, run, "done")
+    assert wf.main(["record", str(run), "x", str(run / "result.json")]) == 0
+    assert not (active / NAME).exists()
+    rows = [r.split("\t") for r in (run / "decisions.tsv").read_text().splitlines() if "\trelease\t" in r]
+    assert len(rows) == 1
+    assert rows[0][1:5] == ["release", "release", "task done", "s1"]
+
