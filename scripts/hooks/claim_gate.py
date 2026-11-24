@@ -32,9 +32,10 @@ def _load_claims(workspace: Path) -> list[dict]:
 
 def main(workspace: Path = WORKSPACE) -> int:
     """Return 1 and print the blocking message when another session holds the current branch, else 0."""
-    branch = subprocess.run(
-        ["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True, check=True
-    ).stdout.strip()
+    head = subprocess.run(["git", "symbolic-ref", "--short", "HEAD"], capture_output=True, text=True)
+    if head.returncode != 0:
+        return 0
+    branch = head.stdout.strip()
     message = blocked(branch, os.environ.get("CLAUDE_CODE_SESSION_ID", ""), _load_claims(workspace))
     if message is None:
         return 0
