@@ -7,7 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-HOOKS = Path(__file__).resolve().parents[1] / "scripts" / "hooks"
+WORKSPACE = Path(__file__).resolve().parents[1]
+VENV_PYTHON = WORKSPACE / ".venv" / "bin" / "python"
+PYTHON = str(VENV_PYTHON) if VENV_PYTHON.exists() else sys.executable
+HOOKS = WORKSPACE / "scripts" / "hooks"
 CHECKS = ("lint_gate.py", "review_gate.py", "claim_gate.py")
-failed = [subprocess.call([sys.executable, str(HOOKS / name)]) for name in CHECKS]
+failed = [subprocess.call([PYTHON, str(HOOKS / name)]) for name in CHECKS]
 sys.exit(1 if any(failed) else 0)

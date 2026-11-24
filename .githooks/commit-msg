@@ -4,5 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-CHECK = Path(__file__).resolve().parents[1] / "scripts" / "hooks" / "commit_msg.py"
-sys.exit(subprocess.call([sys.executable, str(CHECK), sys.argv[1]]))
+WORKSPACE = Path(__file__).resolve().parents[1]
+VENV_PYTHON = WORKSPACE / ".venv" / "bin" / "python"
+PYTHON = str(VENV_PYTHON) if VENV_PYTHON.exists() else sys.executable
+CHECK = WORKSPACE / "scripts" / "hooks" / "commit_msg.py"
+sys.exit(subprocess.call([PYTHON, str(CHECK), sys.argv[1]]))
