@@ -212,3 +212,16 @@ def test_us18_failed_ids_keeps_whole_id_up_to_the_message():
         "FAILED tests/t.py::test_y\n"
     )
     assert checks.failed_ids(output) == ["tests/t.py::test_x[   ]", "tests/t.py", "tests/t.py::test_y"]
+
+
+def test_us18_run_pytest_crashed_run_is_a_failure_not_green(tmp_path):
+    fake = tmp_path / "fake_python"
+    fake.write_text("#!/bin/sh\necho 'No module named pytest' >&2\nexit 1\n")
+    fake.chmod(0o755)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "test_ok.py").write_text("def test_ok():\n    assert True\n")
+    assert checks.run_pytest(repo, ["."], fake) == {
+        "code": 1, "failed": ["pytest exit 1: No module named pytest"],
+    }
+    assert checks.run_pytest(repo, ["."], Path(sys.executable)) == {"code": 0, "failed": []}
