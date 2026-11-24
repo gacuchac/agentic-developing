@@ -112,3 +112,23 @@ def test_us6_next_unit_last_on_final_unit(tmp_path):
 def test_us6_next_unit_finished_in_finish_stage(tmp_path):
     out, _, _ = autonodes.HANDLERS["next_unit"](_state(tmp_path, unit=1, stage="finish"), _ctx(tmp_path))
     assert out == "finished"
+
+
+def test_us6_write_unit_fix_after_full_decide_holds_failing_tests(tmp_path):
+    s = _state(tmp_path, unit=2, fix=1)
+    s["history"] = [
+        {"t": "t1", "unit": "2", "node": "full_suite", "outcome": "fail", "failed": ["tests/t.py::test_a"]},
+        {
+            "t": "t2",
+            "unit": "2",
+            "node": "full_decide",
+            "decision": "code_wrong",
+            "evidence": {"tests": ["tests/t.py::test_a"]},
+        },
+    ]
+    out, _, _ = autonodes.HANDLERS["write_unit"](s, _ctx(tmp_path))
+    assert out == "done"
+    text = (tmp_path / "unit.md").read_text()
+    assert text.splitlines()[0] == units.plan_units(PLAN)[1].splitlines()[0]
+    assert "Fix: full-suite tests/t.py::test_a on abc123" in text
+    assert text.splitlines()[-1] == "tests/t.py::test_a"
