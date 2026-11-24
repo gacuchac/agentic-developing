@@ -69,3 +69,41 @@ def test_us10_run_pytest_defaults_without_python_arg(tmp_path):
     repo = _repo(tmp_path, True)
     res = checks.run_pytest(repo, ["test_bad.py"])
     assert res["code"] == 1 and res["failed"] == ["test_bad.py::test_bad"]
+
+
+def _git(repo, *args):
+    import subprocess
+
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        cwd=repo, check=True, capture_output=True,
+    )
+
+
+def _tmp_repo(tmp_path):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests" / "t.py").write_text("a = 1\n")
+    (tmp_path / "src" / "a.py").write_text("a = 1\n")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    return tmp_path
+
+
+def test_us10_tests_touched_lists_edited_and_untracked_test_files(tmp_path):
+    repo = _tmp_repo(tmp_path)
+    (repo / "tests" / "t.py").write_text("a = 2\n")
+    (repo / "tests" / "u.py").write_text("b = 1\n")
+    assert sorted(checks.tests_touched(repo)) == ["tests/t.py", "tests/u.py"]
+
+
+def test_us10_tests_touched_ignores_non_test_changes(tmp_path):
+    repo = _tmp_repo(tmp_path)
+    (repo / "src" / "a.py").write_text("a = 2\n")
+    assert checks.tests_touched(repo) == []
+
+
+def test_us10_tests_touched_empty_on_clean_tree(tmp_path):
+    repo = _tmp_repo(tmp_path)
+    assert checks.tests_touched(repo) == []
