@@ -5,20 +5,19 @@ STOPS = {"escalate": "user", "architecture_stop": "user"}
 _RAW: dict[str, dict[str, str]] = {
     "write_unit": {"done": "qa_write"},
     "qa_write": {"recorded": "red_run"},
-    "red_run": {"expected": "tests_review", "unexpected": "red_decide"},
+    "red_run": {"expected": "commit_tests", "unexpected": "red_decide"},
     "red_decide": {"tests_wrong": "qa_write"},
-    "tests_review": {"PASS": "implement", "CHANGES": "tests_decide", "MALFORMED": "user"},
-    "tests_decide": {"correct": "qa_write", "overstated": "implement", "wrong": "implement"},
-    "implement": {"recorded": "impl_review"},
-    "impl_review": {"PASS": "run_tests", "CHANGES": "impl_decide", "MALFORMED": "user"},
-    "impl_decide": {"correct": "implement", "overstated": "run_tests", "wrong": "run_tests"},
-    "run_tests": {"pass": "count_lines", "fail": "fail_decide"},
-    "fail_decide": {"code_wrong": "implement", "tests_wrong": "qa_write"},
-    "count_lines": {"ok": "commit", "over": "implement"},
-    "commit": {"done": "commit_reviews", "refused": "commit"},
-    "commit_reviews": {"PASS": "next_unit", "CHANGES": "commit_decide", "MALFORMED": "user"},
-    "commit_decide": {"correct": "write_unit", "overstated": "next_unit", "wrong": "next_unit"},
-    "next_unit": {"more": "write_unit", "last": "full_suite"},
+    "commit_tests": {"done": "implement", "refused": "qa_write"},
+    "implement": {"recorded": "tests_review"},
+    "tests_review": {"PASS": "verify", "CHANGES": "tests_decide", "MALFORMED": "user"},
+    "tests_decide": {"correct": "qa_fix", "overstated": "verify", "wrong": "verify"},
+    "qa_fix": {"recorded": "commit_tests"},
+    "verify": {"fast": "commit_fix", "full": "impl_review", "tests_touched": "implement", "fail": "fail_decide"},
+    "fail_decide": {"code_wrong": "implement", "tests_wrong": "qa_fix"},
+    "impl_review": {"PASS": "commit_fix", "CHANGES": "impl_decide", "MALFORMED": "user"},
+    "impl_decide": {"correct": "implement", "overstated": "commit_fix", "wrong": "commit_fix"},
+    "commit_fix": {"done": "next_unit", "refused": "implement"},
+    "next_unit": {"more": "write_unit", "last": "done", "finished": "done"},
     "full_suite": {"pass": "answers_ask", "fail": "full_decide"},
     "full_decide": {"code_wrong": "write_unit"},
     "answers_ask": {"PASS": "done", "CHANGES": "aa_decide", "MALFORMED": "user"},
@@ -29,21 +28,20 @@ _RAW: dict[str, dict[str, str]] = {
 
 EDGES: dict[str, dict[str, str]] = {n: {**e, **STOPS} if n.endswith("_decide") else e for n, e in _RAW.items()}
 
-AGENT_STEPS = {"qa_write": ("qa", "write"), "implement": ("implementer", "code")}
+AGENT_STEPS = {"qa_write": ("qa", "write"), "qa_fix": ("qa", "fix"), "implement": ("implementer", "code")}
 REVIEW_PASSES = {
     "tests_review": ("tests",),
     "impl_review": ("impl",),
-    "commit_reviews": ("commit", "principles", "alternatives"),
     "answers_ask": ("answers-ask",),
 }
 DECIDES_ON = {
     "tests_decide": "tests_review",
     "impl_decide": "impl_review",
-    "commit_decide": "commit_reviews",
     "aa_decide": "answers_ask",
 }
 _BACK = [("tests_decide", "correct"), ("red_decide", "tests_wrong"), ("impl_decide", "correct")]
-_BACK += [("fail_decide", "code_wrong"), ("fail_decide", "tests_wrong"), ("count_lines", "over")]
+_BACK += [("fail_decide", "code_wrong"), ("fail_decide", "tests_wrong"), ("verify", "tests_touched")]
+_BACK += [("commit_tests", "refused"), ("commit_fix", "refused")]
 BACK_EDGES: dict[tuple[str, str], str] = {(n, o): EDGES[n][o] for n, o in _BACK}
 ROUND_CAP = 3
 WRONG_CAP = 2
