@@ -169,6 +169,22 @@ def identity(env: Mapping[str, str]) -> tuple[str, int]:
     return (session, int(pid)) if session and pid.isdigit() else ("", 0)
 
 
+def _log_takeover(run: Path, ctx: Ctx, message: str) -> None:
+    ctx.log(run, [ctx.now(), "takeover", "takeover", message, "", ""])
+
+
+def run_release(run: Path, reason: str, env: Mapping[str, str], ctx: Ctx) -> list[str]:
+    """Release the run's claim and log a release row with the reason and old holder; return [] or error lines.
+
+    Refuses with one error line, leaving the claim, when env has WF_AGENT=1 (a workflow subagent).
+    """
+    if env.get("WF_AGENT") == "1":
+        return ["wf release is for the user, not for workflow agents"]
+    held = claims.release(run.parents[1] / ".active", claims.claim_name(run.parent.name, run.name))
+    ctx.log(run, [ctx.now(), "release", "release", reason, (held or {}).get("session", ""), ""])
+    return []
+
+
 def run_claim(run: Path, env: Mapping[str, str], ctx: Ctx) -> list[str]:
     """Claim the run's task for the session in env; return [] or one error line naming the live holder.
 
@@ -180,7 +196,8 @@ def run_claim(run: Path, env: Mapping[str, str], ctx: Ctx) -> list[str]:
     branch, _ = gitops.launch_info(ctx.repo)
     claim = claims.make_claim(session, pid, procs.pid_start(pid) or "", str(run), str(ctx.repo), branch, ctx.now())
     name = claims.claim_name(run.parent.name, run.name)
-    outcome, holder = claims.acquire(run.parents[1] / ".active", name, claim, procs.pid_alive, procs.pid_start, print)
+    log = partial(_log_takeover, run, ctx)
+    outcome, holder = claims.acquire(run.parents[1] / ".active", name, claim, procs.pid_alive, procs.pid_start, log)
     if outcome != "refused":
         return []
     return [f"{name} is held by session {holder['session']} on {holder['branch']} since {holder['since']}"]
@@ -191,6 +208,8 @@ def _parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="cmd", required=True)
     for name in ("start", "status", "options", "report", "take", "record"):
         sub.add_parser(name).add_argument("run", type=Path)
+    sub.add_parser("release").add_argument("run", type=Path)
+    sub.choices["release"].add_argument("--reason", required=True)
     sub.choices["start"].add_argument("--plan", default="plan.md")
     sub.choices["take"].add_argument("option")
     sub.choices["take"].add_argument("--evidence", type=Path)
@@ -231,6 +250,11 @@ def main(argv: list[str] | None = None) -> int:
     """Run one wf command; return 0; 2 when another session holds the task; 1 on refusal errors (printed to stderr)."""
     args = _parser().parse_args(argv)
     ctx = default_ctx(args.run)
+    if args.cmd == "release":
+        errors = run_release(args.run, args.reason, os.environ, ctx)
+        if errors:
+            print("\n".join(errors), file=sys.stderr)
+        return 1 if errors else 0
     if args.cmd not in ("start", "take", "record"):
         _show(args, ctx)
         return 0
