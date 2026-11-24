@@ -3,7 +3,15 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
+
+WORKSPACE = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(WORKSPACE / "scripts" / "workflow"))
+
+from effects import claimfiles  # noqa: E402
+
+EDIT_TOOLS = {"Edit": "file_path", "Write": "file_path", "NotebookEdit": "notebook_path"}
 
 
 def _inside(path: str, folder: str) -> bool:
@@ -31,3 +39,15 @@ def path_allowed(
     if _in_claim(path, claim, workspace) or not _inside(path, workspace) or is_root_task:
         return True, ""
     return False, f"{path} is outside your task; edit only inside {claim['checkout']}."
+
+
+def _decide(event: dict, active: Path, workspace: Path) -> tuple[bool, str]:
+    """Return (allowed, reason) for the Edit, Write or NotebookEdit call in `event`."""
+    key = EDIT_TOOLS.get(event.get("tool_name"))
+    if key is None:
+        return True, ""
+    names = claimfiles.owned_by(active, event.get("session_id"))
+    claim = claimfiles.read(active, names[0]) if names else None
+    others = [c for p in active.glob("*.json") if (c := claimfiles.read(active, p.name)) and c != claim]
+    is_root = claim is not None and os.path.normpath(claim["checkout"]) == str(workspace)
+    return path_allowed(event["tool_input"][key], claim, is_root, others, str(workspace))
