@@ -5,10 +5,14 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(WORKSPACE / "scripts" / "workflow"))
+
+from effects import claimfiles  # noqa: E402
 
 BLOCK = re.compile(r"```workflow-result\s*\n(.*?)\n\s*```", re.DOTALL)
 STEP_LINE = re.compile(r"^wf-step:\s*(\S+)", re.MULTILINE)
@@ -39,3 +43,15 @@ def real_record(run: Path, step_id: str, result: dict) -> list[str]:
             ["python3", str(wf), "record", str(run), step_id, handle.name], capture_output=True, text=True
         )
     return done.stderr.splitlines() if done.returncode else []
+
+
+def _pending_step(event: dict, active: Path) -> tuple[Path, str] | None:
+    """Return (run folder, step id) when the stopping agent is the one the session's pending step waits for."""
+    names = claimfiles.owned_by(active, event.get("session_id"))
+    if not names:
+        return None
+    run = Path(claimfiles.read(active, names[0])["run"])
+    pending = (json.loads((run / "state.json").read_text()).get("pending")) or {}
+    if pending.get("kind") != "agent" or pending.get("agent") != event.get("agent_type"):
+        return None
+    return run, pending["step_id"]
