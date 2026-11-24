@@ -99,3 +99,23 @@ def decision_facts(state: dict, ctx: Ctx) -> dict:
 def legal(state: dict, ctx: Ctx) -> list[str]:
     """Return the options the current node offers, from `graph.legal_options` and the decision facts."""
     return graph.legal_options(state["node"], st.unit_history(state), decision_facts(state, ctx)["uncovered"])
+
+
+def _refusal(state: dict, option: str, ctx: Ctx) -> list[str]:
+    kind = state["pending"]["kind"]
+    if kind not in ("decide", "user"):
+        return [f"no decision is pending (pending is {kind})"]
+    options = legal(state, ctx)
+    return [] if option in options else [f"{option} is not legal at {state['node']}; legal: {', '.join(options)}"]
+
+
+def _entry(state: dict, option: str, evidence: dict, facts: dict) -> dict:
+    node = state["node"]
+    entry = {"node": node, "decision": option, "evidence": evidence}
+    if option == "user_continue":
+        return {**entry, "to": evidence["to"], "by": "user"}
+    to = graph.EDGES[node].get(option, graph.STOPS.get(option))
+    if option in ("overstated", "wrong"):
+        entry["passes"] = {f["id"]: facts["passes"][f["id"]] for f in evidence["findings"]}
+        to = node if graph.undismissed([*st.unit_history(state), entry], node, facts["fails"]) else to
+    return {**entry, "to": to}
