@@ -145,3 +145,19 @@ def test_us8_unquoted_fail_is_dropped_and_verdict_passes(tmp_path):
     assert outcome == "PASS"
     assert entry["reviews"][0]["dropped"] == ["C2"]
     assert entry["reviews"][0]["fails"] == []
+
+
+def test_us18_decided_tests_review_is_not_asked_again(tmp_path):
+    ctx, runs, collected = make_ctx(tmp_path, [], collect=review_text(RUBRICS["tests"], fails={"T1": 1}))
+    state = make_state("tests_review")
+    for entry in (
+        {"node": "commit_tests", "outcome": "done", "sha": "abc123"},
+        {"node": "tests_review", "outcome": "CHANGES", "verdict": "CHANGES", "reviews": []},
+        {"node": "tests_decide", "decision": "overstated"},
+    ):
+        state = st.with_entry(state, entry, "T")
+    outcome, entry, _ = autonodes.HANDLERS["tests_review"](state, ctx)
+    assert outcome == "PASS"
+    assert entry == {"verdict": "PASS", "reviews": [], "decided": True}
+    assert collected == []
+    assert runs == []
