@@ -184,14 +184,14 @@ def _commit_subtract(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
 
 def _scope(state: dict) -> tuple[str | None, str | None]:
     base = state["launch"] if state["node"] in ("branch_reviews", "answers_ask") else None
-    return (None if base else state["head"]), base
+    return (None if base or state["node"] == "impl_review" else state["head"]), base
 
 
 def _judge(name: str, path: Path | None, state: dict, ctx: Ctx) -> dict:
     """Derive one pass's verdict from its saved review; a None path is MALFORMED."""
     if path is None:
         return {"pass": name, "review": None, "verdict": "MALFORMED", "fails": [], "dropped": []}
-    source = ctx.source(ctx.repo, *_scope(state))
+    source = ctx.diff(ctx.repo) if state["node"] == "impl_review" else ctx.source(ctx.repo, *_scope(state))
     text = path.read_text()
     verdict, fails = review.derive_verdict(text, review.expected_ids(name, ctx.repo), source)
     dropped = [] if verdict == "MALFORMED" else review.dropped_fails(text, source)
