@@ -122,7 +122,7 @@ def test_us11_take_with_bad_evidence_refused_state_unchanged(env, tmp_path):
 def test_us11_record_wrong_step_refused_state_unchanged(env, tmp_path):
     run = _started(env)
     res = tmp_path / "result.json"
-    res.write_text(json.dumps({"tests_added": [], "red_run": {"failed": [], "reason_expected": True}}))
+    res.write_text(json.dumps({"tests_added": [], "red_run": {"failed": [], "reason_expected": True}, "left_out": []}))
     before = (run / "state.json").read_bytes()
     r = wf("record", run, "wrong-step", res)
     assert r.returncode == 1

@@ -11,7 +11,7 @@ import agent_steps
 import pytest
 from agent_steps import SCHEMAS, validate_result
 
-QA = {"tests_added": ["tests/test_a.py"], "red_run": {"failed": ["t1"], "reason_expected": True}}
+QA = {"tests_added": ["tests/test_a.py"], "red_run": {"failed": ["t1"], "reason_expected": True}, "left_out": []}
 IMPL = {"files": {"a.py": 3, "b.py": 10}, "tests_run": {"passed": 4, "failed": []}, "tests_disputed": []}
 
 
@@ -30,13 +30,17 @@ def without(base, key):
 
 def test_us10_schemas_exact_value():
     assert {
-        "qa": {"tests_added": [str], "red_run": {"failed": [str], "reason_expected": bool}},
+        "qa": {"tests_added": [str], "red_run": {"failed": [str], "reason_expected": bool}, "left_out": [str]},
         "qa_fix": {"tests_changed": [str]},
         "implementer": {"files": {str: int}, "tests_run": {"passed": int, "failed": [str]}, "tests_disputed": [str]},
         "subtract": {"removed": str, "files": {str: int}},
     } == SCHEMAS
     assert agent_steps.EXAMPLES == {
-        "qa": {"tests_added": ["tests/test_x.py"], "red_run": {"failed": ["test_x"], "reason_expected": True}},
+        "qa": {
+            "tests_added": ["tests/test_x.py"],
+            "red_run": {"failed": ["test_x"], "reason_expected": True},
+            "left_out": ["case: passes today"],
+        },
         "qa_fix": {"tests_changed": ["tests/test_x.py"]},
         "implementer": {"files": {"src/x.py": 12}, "tests_run": {"passed": 3, "failed": []}, "tests_disputed": []},
         "subtract": {"removed": "unused helper", "files": {"src/x.py": 4}},
@@ -52,7 +56,10 @@ def test_us10_valid_implementer_has_no_errors():
 
 
 def test_us10_empty_lists_and_files_are_valid():
-    assert validate_result("qa", {"tests_added": [], "red_run": {"failed": [], "reason_expected": False}}) == []
+    assert (
+        validate_result("qa", {"tests_added": [], "red_run": {"failed": [], "reason_expected": False}, "left_out": []})
+        == []
+    )
     assert (
         validate_result("implementer", {"files": {}, "tests_run": {"passed": 0, "failed": []}, "tests_disputed": []})
         == []
@@ -303,3 +310,35 @@ def test_us17_default_prompt_for_fix_shows_qa_fix_shape():
 def test_us17_template_schema_for_subtract_is_the_subtract_example():
     out = render("implementer", "subtract", template="{schema}")
     assert json.loads(out) == agent_steps.EXAMPLES["subtract"]
+
+
+# ---- qa names the cases it left out (US-25) ----
+
+
+def test_us25_qa_without_left_out_names_it():
+    errs = validate_result("qa", without(QA, "left_out"))
+    assert len(errs) == 1 and "left_out" in errs[0]
+
+
+def test_us25_qa_left_out_not_a_list_fails():
+    errs = validate_result("qa", bad(QA, left_out="x"))
+    assert len(errs) == 1 and "left_out" in errs[0]
+
+
+def test_us25_qa_left_out_with_a_non_string_names_the_element():
+    errs = validate_result("qa", bad(QA, left_out=["a", 3]))
+    assert len(errs) == 1 and "left_out[1]" in errs[0]
+
+
+def test_us25_qa_write_prompt_example_shows_left_out():
+    assert result_block(render("qa", "write"))["left_out"] == ["case: passes today"]
+
+
+def test_us25_qa_write_md_tells_qa_to_fill_left_out():
+    text = (Path(__file__).resolve().parent.parent / ".claude/workflow/prompts/qa-write.md").read_text()
+    assert "left_out" in text and "already passes" in text
+
+
+def test_us25_tests_review_pass_explains_left_out():
+    text = (Path(__file__).resolve().parent.parent / ".claude/review-passes/tests.md").read_text()
+    assert "left_out" in text and "no criterion fails" in text.lower()

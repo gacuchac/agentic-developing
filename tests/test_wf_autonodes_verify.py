@@ -47,7 +47,7 @@ def make_ctx(tmp_path, tests=None, touched=None, diff=None, size=None, added=Non
     return ctx, calls
 
 
-def make_state(claimed_failed=None, reason=True, disputed=None, added=ADDED):
+def make_state(claimed_failed=None, reason=True, disputed=None, added=ADDED, left_out=()):
     s = st.new_state("t", "b", "l")
     s = {**s, "node": "red_run"}
     s = st.with_entry(
@@ -61,6 +61,7 @@ def make_state(claimed_failed=None, reason=True, disputed=None, added=ADDED):
                     "failed": claimed_failed if claimed_failed is not None else added,
                     "reason_expected": reason,
                 },
+                "left_out": list(left_out),
             },
         },
         "T0",
@@ -100,7 +101,7 @@ def test_us18_red_run_names_added_test_that_passes_as_not_red(tmp_path):
     ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": [ADDED[0]]}, added=lambda repo: list(ADDED))
     outcome, entry, _ = autonodes.HANDLERS["red_run"](make_state(), ctx)
     assert outcome == "unexpected"
-    assert entry == {"tests": ADDED, "failed": [ADDED[0]], "claimed": {"failed": ADDED, "reason_expected": True}, "not_red": [ADDED[1]]}
+    assert entry == {"tests": ADDED, "failed": [ADDED[0]], "claimed": {"failed": ADDED, "reason_expected": True}, "not_red": [ADDED[1]], "left_out": []}
     assert json.loads((tmp_path / "red.json").read_text()) == entry
 
 
@@ -116,7 +117,7 @@ def test_us18_red_run_all_added_failing_is_expected_with_empty_not_red(tmp_path)
     ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": list(ADDED)}, added=lambda repo: list(ADDED))
     outcome, entry, _ = autonodes.HANDLERS["red_run"](make_state(), ctx)
     assert outcome == "expected"
-    assert entry == {"tests": ADDED, "failed": ADDED, "claimed": {"failed": ADDED, "reason_expected": True}, "not_red": []}
+    assert entry == {"tests": ADDED, "failed": ADDED, "claimed": {"failed": ADDED, "reason_expected": True}, "not_red": [], "left_out": []}
     assert json.loads((tmp_path / "red.json").read_text()) == entry
 
 
@@ -286,3 +287,11 @@ def test_us24_verify_failing_suite_gives_fail_with_no_reasons(tmp_path):
     outcome, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
     assert outcome == "fail"
     assert entry["reasons"] == []
+
+
+def test_us25_red_run_entry_and_red_json_hold_qa_left_out(tmp_path):
+    left = ["case a: passes today", "case b: covered by an earlier unit"]
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": list(ADDED)}, added=lambda repo: list(ADDED))
+    _, entry, _ = autonodes.HANDLERS["red_run"](make_state(left_out=left), ctx)
+    assert entry == {"tests": ADDED, "failed": ADDED, "claimed": {"failed": ADDED, "reason_expected": True}, "not_red": [], "left_out": left}
+    assert json.loads((tmp_path / "red.json").read_text()) == entry

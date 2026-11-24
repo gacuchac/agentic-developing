@@ -13,7 +13,7 @@ import engine  # noqa: E402
 import state as st  # noqa: E402
 
 CTX = SimpleNamespace(now=lambda: "t")
-QA = {"tests_added": ["tests/test_x.py"], "red_run": {"failed": ["test_x"], "reason_expected": True}}
+QA = {"tests_added": ["tests/test_x.py"], "red_run": {"failed": ["test_x"], "reason_expected": True}, "left_out": []}
 IMPL = {"files": {"src/x.py": 3}, "tests_run": {"passed": 2, "failed": []}, "tests_disputed": []}
 
 

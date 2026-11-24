@@ -11,7 +11,7 @@ _path = Path(__file__).resolve().parents[1] / "scripts" / "hooks" / "subagent_re
 PENDING = {"kind": "agent", "agent": "qa", "step": "write", "step_id": "u3-write-1"}
 STATE = {"task": "t", "node": "write_unit", "pending": PENDING}
 CLAIM = {"session": "s1", "pid": 1, "pid_start": "x", "run": "", "checkout": "/c", "branch": "feature/t", "since": "now"}
-RESULT = {"tests_added": ["tests/test_x.py"], "red_run": {"failed": ["test_x"], "reason_expected": True}}
+RESULT = {"tests_added": ["tests/test_x.py"], "red_run": {"failed": ["test_x"], "reason_expected": True}, "left_out": []}
 
 
 @pytest.fixture
