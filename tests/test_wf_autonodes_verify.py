@@ -13,7 +13,7 @@ import state as st  # noqa: E402
 ADDED = ["tests/test_a.py::test_one", "tests/test_a.py::test_two"]
 
 
-def make_ctx(tmp_path, tests=None, touched=None, diff=None):
+def make_ctx(tmp_path, tests=None, touched=None, diff=None, size=None):
     calls = []
 
     def run_tests(repo, ids):
@@ -23,6 +23,7 @@ def make_ctx(tmp_path, tests=None, touched=None, diff=None):
     def unused(*a, **k):
         raise AssertionError("unexpected call")
 
+    extra = {"size": size} if size is not None else {}
     ctx = autonodes.Ctx(
         run=tmp_path,
         repo=tmp_path / "repo",
@@ -39,6 +40,7 @@ def make_ctx(tmp_path, tests=None, touched=None, diff=None):
         file_at=unused,
         log=lambda *a, **k: None,
         now=lambda: "T",
+        **extra,
     )
     return ctx, calls
 
@@ -205,3 +207,56 @@ def test_us10_full_suite_fail_accepts_no_declared_breaks(tmp_path):
     outcome, entry, _ = autonodes.HANDLERS["full_suite"](make_state(), ctx)
     assert outcome == "fail"
     assert entry["failed"] == ["tests/t.py::test_a"]
+
+
+SCOPED = "Lane: fast\nEstimate: ~12 lines. Files: `scripts/a.py`, `tests/test_a.py`.\n"
+
+
+def test_us24_verify_fast_unit_with_file_outside_its_files_gives_full_with_reason(tmp_path):
+    unit_md(tmp_path, SCOPED)
+    ctx, _ = make_ctx(tmp_path, size=lambda repo: {"scripts/a.py": 5, "scripts/other.py": 3})
+    outcome, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
+    assert outcome == "full"
+    assert entry == {"failed": [], "disputed": [], "touched": [], "reasons": ["outside: scripts/other.py"]}
+
+
+def test_us24_verify_fast_unit_over_its_limit_gives_full_with_reason(tmp_path):
+    unit_md(tmp_path, SCOPED)
+    ctx, _ = make_ctx(tmp_path, size=lambda repo: {"scripts/a.py": 31})
+    outcome, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
+    assert outcome == "full"
+    assert entry["reasons"] == ["size: 31 lines, limit 30"]
+
+
+def test_us24_verify_fast_unit_inside_files_and_limit_gives_fast_with_no_reasons(tmp_path):
+    unit_md(tmp_path, SCOPED)
+    sizes = []
+    ctx, _ = make_ctx(tmp_path, size=lambda repo: sizes.append(repo) or {"scripts/a.py": 12})
+    outcome, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
+    assert outcome == "fast"
+    assert entry == {"failed": [], "disputed": [], "touched": [], "reasons": []}
+    assert sizes == [tmp_path / "repo"]
+
+
+def test_us24_verify_full_unit_has_no_reasons_and_does_not_measure(tmp_path):
+    unit_md(tmp_path, "Lane: full\nFiles: `scripts/a.py`.\n")
+
+    def boom(repo):
+        raise AssertionError("size must not be called")
+
+    ctx, _ = make_ctx(tmp_path, size=boom)
+    outcome, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
+    assert outcome == "full"
+    assert entry == {"failed": [], "disputed": [], "touched": [], "reasons": []}
+
+
+def test_us24_verify_failing_suite_gives_fail_with_no_reasons(tmp_path):
+    unit_md(tmp_path, SCOPED)
+    ctx, _ = make_ctx(
+        tmp_path,
+        tests=lambda ids: {"code": 1, "failed": ["tests/test_o.py::test_x"]},
+        size=lambda repo: {"scripts/other.py": 99},
+    )
+    outcome, entry, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
+    assert outcome == "fail"
+    assert entry["reasons"] == []
