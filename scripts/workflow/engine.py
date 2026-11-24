@@ -67,7 +67,8 @@ def _finding_facts(history: list[dict]) -> dict:
 
 def _failures(state: dict, history: list[dict]) -> list[str]:
     entry = _last(history, "failed")
-    extra = {"fail_decide": entry.get("disputed", []), "red_decide": entry.get("tests", [])}
+    disputed = [d.split(": ", 1)[0] for d in entry.get("disputed", [])]
+    extra = {"fail_decide": disputed, "red_decide": entry.get("tests", [])}
     return [*entry.get("failed", []), *extra.get(state["node"], [])]
 
 
@@ -79,8 +80,8 @@ def decision_facts(state: dict, ctx: Ctx) -> dict:
     """Return the facts `evidence.check_evidence` reads, built from the unit's history and the run folder.
 
     Keys: fails, passes (id to pass) and capped from the last review entry; failures (last run entry's
-    failed, plus disputed at fail_decide, or tests at red_decide); docs (plan and ask.md texts); read
-    (path to text, at state["head"] at tests_decide, else the working tree); run; resume; uncovered.
+    failed, plus the test id of each disputed entry at fail_decide, or tests at red_decide); docs (plan and ask.md
+    texts); read (path to text, at state["head"] at tests_decide, else the working tree); run; resume; uncovered.
     """
     history = st.unit_history(state)
     sha = state["head"] if state["node"] == "tests_decide" else None
