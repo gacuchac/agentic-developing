@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
+import json
 import sys
 import time
 from collections import Counter
@@ -155,3 +157,27 @@ def start_state(run: Path, plan: str, ctx: Ctx) -> tuple[dict | None, list[str]]
         return None, [str(e).strip()]
     state = st.new_state(f"{run.parent.name}/{run.name}", branch, launch, plan)
     return engine.advance(state, ctx), []
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="wf")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    for name in ("start", "status", "options", "report", "take", "record"):
+        sub.add_parser(name).add_argument("run", type=Path)
+    sub.choices["start"].add_argument("--plan", default="plan.md")
+    sub.choices["take"].add_argument("option")
+    sub.choices["take"].add_argument("--evidence", type=Path)
+    sub.choices["record"].add_argument("step_id")
+    sub.choices["record"].add_argument("result", type=Path)
+    return parser
+
+
+def _run(args: argparse.Namespace, ctx: Ctx) -> tuple[dict | None, list[str]]:
+    run = args.run
+    if args.cmd == "start":
+        return start_state(run, args.plan, ctx)
+    state = st.load(run)
+    if args.cmd == "take":
+        evidence = json.loads(args.evidence.read_text()) if args.evidence else {}
+        return engine.take(state, args.option, evidence, ctx)
+    return engine.record(state, args.step_id, json.loads(args.result.read_text()), ctx)
