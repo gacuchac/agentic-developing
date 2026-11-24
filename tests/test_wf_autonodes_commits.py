@@ -1,17 +1,23 @@
 """Tests for the commit nodes of scripts/workflow/autonodes.py."""
 
+import dataclasses
 import json
+import subprocess
 from pathlib import Path
 
 import autonodes
 import pytest
 import state as st
+from effects import gitops, reviews
 
 UNIT_MD = "### 3. Do the thing (US-9)\nLane: fast\n"
 SHA = "abc1234"
 
 
-def _make(tmp_path, touched=("tests/test_x.py",), commit_raises=False):
+OTHER_HEAD = "commit 999\nAuthor: t <t@t>\n\n    Some other subject\n"
+
+
+def _make(tmp_path, touched=("tests/test_x.py",), commit_raises=False, head=OTHER_HEAD):
     calls = {"commit": [], "log": [], "start_review": [], "evidence": []}
 
     def commit(repo, message, paths):
@@ -40,10 +46,10 @@ def _make(tmp_path, touched=("tests/test_x.py",), commit_raises=False):
         run_review=unused,
         tests=unused,
         touched=lambda repo: list(touched),
-        source=unused,
+        source=lambda repo, commit, base: head,
         commit=commit,
         evidence=evidence,
-        diff=unused,
+        diff=lambda repo: "",
         file_at=unused,
         log=lambda run, cells: calls["log"].append((run, cells)),
         now=lambda: "2026-01-01T00:00:00",
@@ -135,3 +141,33 @@ def test_us10_commit_tests_review_args_name_the_new_commit(tmp_path):
     args = calls["start_review"][0][0]
     assert args[0] == "tests"
     assert args[args.index("--commit") + 1] == SHA
+
+
+def test_us10_commit_fix_resumes_a_commit_a_dead_run_already_made(tmp_path):
+    head = "commit deadbeef\nAuthor: t <t@t>\n\n    US-9: Do the thing\n\ndiff --git a/x b/x\n"
+    ctx, state, calls = _make(tmp_path, commit_raises=True, head=head)
+    outcome, entry, new = autonodes.HANDLERS["commit_fix"](state, ctx)
+    assert outcome == "done"
+    assert entry["sha"] == "deadbeef"
+    assert new["head"] == "deadbeef"
+    assert calls["evidence"] == [(ctx.repo, tmp_path, "deadbeef", ctx.python)]
+    assert (tmp_path / "evidence-deadbeef.json").exists()
+    assert len(calls["log"]) == 1
+
+
+def test_us10_commit_fix_resumes_on_a_real_repo_whose_head_is_the_unit_commit(tmp_path):
+    ctx, state, calls = _make(tmp_path)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "core.hooksPath=/dev/null"]
+    subprocess.run([*git, "init", "-q"], cwd=repo, check=True)
+    subprocess.run([*git, "config", "core.hooksPath", "/dev/null"], cwd=repo, check=True)
+    (repo / "a.py").write_text("a = 1\n")
+    subprocess.run([*git, "add", "-A"], cwd=repo, check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "US-9: Do the thing"], cwd=repo, check=True)
+    sha = subprocess.run([*git, "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+    ctx = dataclasses.replace(ctx, commit=gitops.commit, source=reviews.review_source, diff=gitops.worktree_diff)
+    outcome, entry, new = autonodes.HANDLERS["commit_fix"](state, ctx)
+    assert outcome == "done"
+    assert new["head"] == sha
+    assert calls["evidence"] == [(repo, tmp_path, sha, ctx.python)]
