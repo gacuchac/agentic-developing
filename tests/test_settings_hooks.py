@@ -56,3 +56,12 @@ def test_us14_session_end_runs_session_end_with_5s_timeout() -> None:
     assert found, "SessionEnd does not run session_end.py"
     assert found[0]["type"] == "command"
     assert found[0]["timeout"] == 5
+
+
+def test_us20_posttooluse_agent_runs_agent_registry_with_10s_timeout() -> None:
+    assert _entries("PostToolUse", "Agent") == [
+        {"type": "command", "command": _command("agent_registry"), "timeout": 10}
+    ]
+    assert _entries("PostToolUse", "Edit|Write") == [
+        {"type": "command", "command": _command("post_edit"), "timeout": 30}
+    ]
