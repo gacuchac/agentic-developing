@@ -32,9 +32,14 @@ def _decide_agent(tool_input: dict, state: dict | None) -> tuple[bool, str]:
     """Decide an Agent launch against the pending step in `state`."""
     agent = tool_input.get("subagent_type")
     pending = (state or {}).get("pending") or {}
-    if agent not in WORKFLOW_AGENTS or pending.get("kind") != "agent":
+    step = _step_id(tool_input.get("prompt", ""))
+    kind = pending.get("kind")
+    if agent not in WORKFLOW_AGENTS or not kind or (kind != "agent" and step is None):
         return True, ""
-    if _step_id(tool_input.get("prompt", "")) == pending.get("step_id") and agent == pending.get("agent"):
+    if kind != "agent":
+        what = "a decision" if kind == "decide" else f"a {kind} step"
+        return False, f"Pending is {what} at {(state or {}).get('node')}; no agent step is open."
+    if step == pending.get("step_id") and agent == pending.get("agent"):
         return True, ""
     return False, f"Pending step is {pending.get('step_id')} for agent {pending.get('agent')}; use its `wf-step:` line."
 
