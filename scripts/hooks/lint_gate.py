@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from post_edit import find_ruff  # noqa: E402
+from post_edit import find_ruff, workspace_ruff_config  # noqa: E402
 from slop_checks import check_source  # noqa: E402
 
 
@@ -60,10 +60,15 @@ def ruff_failed(sources: dict[str, str]) -> bool:
     if ruff is None:
         print("lint_gate: ruff not found, skipping ruff check", file=sys.stderr)
         return False
+    config = str(workspace_ruff_config())
     failed = False
     for name, source in sources.items():
         result = subprocess.run(
-            [ruff, "check", "--stdin-filename", name, "-"], input=source, capture_output=True, text=True, check=False
+            [ruff, "check", "--config", config, "--stdin-filename", name, "-"],
+            input=source,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         if result.returncode != 0:
             print(result.stdout or result.stderr)

@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 
 def edited_path(event: dict) -> str:
@@ -20,10 +21,16 @@ def find_ruff() -> str | None:
     return shutil.which("ruff", path=f"{os.environ.get('PATH', '')}:/opt/homebrew/bin:/usr/local/bin")
 
 
+def workspace_ruff_config() -> Path:
+    """Path of the workspace's ruff.toml, two folders above this file's folder."""
+    return Path(__file__).resolve().parents[2] / "ruff.toml"
+
+
 def lint(ruff: str, path: str) -> subprocess.CompletedProcess:
-    """Format the file, then lint it."""
-    subprocess.run([ruff, "format", path], capture_output=True, check=False)
-    return subprocess.run([ruff, "check", path], capture_output=True, text=True, check=False)
+    """Format the file, then lint it, both with the workspace ruff config."""
+    config = str(workspace_ruff_config())
+    subprocess.run([ruff, "format", "--config", config, path], capture_output=True, check=False)
+    return subprocess.run([ruff, "check", "--config", config, path], capture_output=True, text=True, check=False)
 
 
 def main() -> int:
