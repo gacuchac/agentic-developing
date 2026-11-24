@@ -32,13 +32,18 @@ def _setup(tmp_path: Path, state: dict | None = STATE) -> tuple[Path, Path]:
     if state is not None:
         (run / "state.json").write_text(json.dumps(state))
     active = tmp_path / "active"
-    active.mkdir()
-    (active / "proj--t.json").write_text(json.dumps({**CLAIM, "run": str(run)}))
+    _register(active, "a1", run, PENDING["step_id"])
     return active, run
 
 
-def _event(message: str, agent_type: str = "qa", session: str = "s1") -> str:
-    return json.dumps({"session_id": session, "agent_id": "a1", "agent_type": agent_type,
+def _register(active: Path, agent_id: str, run: Path, step_id: str, agent: str = "qa") -> None:
+    (active / "agents").mkdir(parents=True, exist_ok=True)
+    entry = {"session": "s1", "run": str(run), "step_id": step_id, "agent": agent}
+    (active / "agents" / f"{agent_id}.json").write_text(json.dumps(entry))
+
+
+def _event(message: str, agent_type: str = "qa", session: str = "s1", agent_id: str = "a1") -> str:
+    return json.dumps({"session_id": session, "agent_id": agent_id, "agent_type": agent_type,
                        "last_assistant_message": message})
 
 
@@ -92,6 +97,7 @@ def test_us14_main_records_result_for_pending_step(hook, tmp_path):
 def test_us14_main_records_implementer_for_implementer_step(hook, tmp_path):
     pending = {"kind": "agent", "agent": "implementer", "step": "implement", "step_id": "u3-impl-1"}
     active, run = _setup(tmp_path, {**STATE, "pending": pending})
+    _register(active, "a1", run, "u3-impl-1", "implementer")
     rec = Recorder()
     assert hook.main(_event(_block('{"ok": true}'), "implementer"), active, rec) == 0
     assert rec.calls == [(run, "u3-impl-1", {"ok": True})]
@@ -111,10 +117,29 @@ def test_us14_main_invalid_block_records_nothing(hook, tmp_path):
     assert rec.calls == []
 
 
-def test_us14_main_no_claim_records_nothing(hook, tmp_path):
+def test_us21_main_unregistered_agent_records_nothing(hook, tmp_path):
     active, _ = _setup(tmp_path)
     rec = Recorder()
-    assert hook.main(_event(_block("{}"), session="other"), active, rec) == 0
+    assert hook.main(_event(_block("{}"), agent_id="stranger"), active, rec) == 0
+    assert rec.calls == []
+
+
+def test_us21_main_two_tasks_pending_same_step_records_on_registered_run_only(hook, tmp_path):
+    active, run_a = _setup(tmp_path)
+    run_b = tmp_path / "run_b"
+    run_b.mkdir()
+    (run_b / "state.json").write_text(json.dumps(STATE))
+    _register(active, "a2", run_b, PENDING["step_id"])
+    rec = Recorder()
+    assert hook.main(_event(_block(json.dumps(RESULT)), agent_id="a2"), active, rec) == 0
+    assert rec.calls == [(run_b, "u3-write-1", RESULT)]
+
+
+def test_us21_main_entry_whose_step_is_no_longer_pending_records_nothing(hook, tmp_path):
+    active, run = _setup(tmp_path)
+    _register(active, "a1", run, "u2-write-1")
+    rec = Recorder()
+    assert hook.main(_event(_block("{}")), active, rec) == 0
     assert rec.calls == []
 
 
