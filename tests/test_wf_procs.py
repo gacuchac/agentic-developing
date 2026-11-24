@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 
-import procs
+from effects import procs
 
 
 def test_us12_current_process_is_alive():
