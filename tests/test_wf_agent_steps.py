@@ -12,7 +12,7 @@ import pytest
 from agent_steps import SCHEMAS, validate_result
 
 QA = {"tests_added": ["tests/test_a.py"], "red_run": {"failed": ["t1"], "reason_expected": True}}
-IMPL = {"files": {"a.py": 3, "b.py": 10}, "tests_run": {"passed": 4, "failed": []}}
+IMPL = {"files": {"a.py": 3, "b.py": 10}, "tests_run": {"passed": 4, "failed": []}, "tests_disputed": []}
 
 
 def bad(base, **over):
@@ -31,8 +31,16 @@ def without(base, key):
 def test_us10_schemas_exact_value():
     assert {
         "qa": {"tests_added": [str], "red_run": {"failed": [str], "reason_expected": bool}},
-        "implementer": {"files": {str: int}, "tests_run": {"passed": int, "failed": [str]}},
+        "qa_fix": {"tests_changed": [str]},
+        "implementer": {"files": {str: int}, "tests_run": {"passed": int, "failed": [str]}, "tests_disputed": [str]},
+        "subtract": {"removed": str, "files": {str: int}},
     } == SCHEMAS
+    assert agent_steps.EXAMPLES == {
+        "qa": {"tests_added": ["tests/test_x.py"], "red_run": {"failed": ["test_x"], "reason_expected": True}},
+        "qa_fix": {"tests_changed": ["tests/test_x.py"]},
+        "implementer": {"files": {"src/x.py": 12}, "tests_run": {"passed": 3, "failed": []}, "tests_disputed": []},
+        "subtract": {"removed": "unused helper", "files": {"src/x.py": 4}},
+    }
 
 
 def test_us10_valid_qa_has_no_errors():
@@ -45,7 +53,10 @@ def test_us10_valid_implementer_has_no_errors():
 
 def test_us10_empty_lists_and_files_are_valid():
     assert validate_result("qa", {"tests_added": [], "red_run": {"failed": [], "reason_expected": False}}) == []
-    assert validate_result("implementer", {"files": {}, "tests_run": {"passed": 0, "failed": []}}) == []
+    assert (
+        validate_result("implementer", {"files": {}, "tests_run": {"passed": 0, "failed": []}, "tests_disputed": []})
+        == []
+    )
 
 
 def test_us10_extra_keys_are_allowed():
@@ -75,8 +86,9 @@ def test_us10_missing_nested_key_names_full_path():
 
 def test_us10_missing_implementer_keys_named():
     errs = validate_result("implementer", {})
-    assert len(errs) == 2
+    assert len(errs) == 3
     assert any("files" in e for e in errs) and any("tests_run" in e for e in errs)
+    assert any("tests_disputed" in e for e in errs)
     d = copy.deepcopy(IMPL)
     del d["tests_run"]["passed"]
     errs = validate_result("implementer", d)

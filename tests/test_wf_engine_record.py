@@ -57,7 +57,13 @@ def test_us10_valid_qa_result_runs_on_to_the_implement_step():
 
 def test_us10_implementer_result_with_empty_tests_disputed_is_accepted():
     s = _at("implement")
-    out, errors = engine.record(s, s["pending"]["step_id"], IMPL, CTX, {"tests_review": _h("PASS")})
+    out, errors = engine.record(
+        s,
+        s["pending"]["step_id"],
+        IMPL,
+        CTX,
+        {"tests_review": _h("PASS"), "verify": _h("fast"), "commit_fix": _h("done"), "next_unit": _h("last")},
+    )
     assert errors == []
     assert out["history"][0]["node"] == "implement"
     assert out["history"][0]["to"] == "tests_review"
