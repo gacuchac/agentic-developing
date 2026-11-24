@@ -77,7 +77,9 @@ def test_us11_start_with_no_units_refused(env):
     (run / "plan.md").write_text("# Plan\n\nnothing here\n")
     r = wf("start", run, "--plan", "plan.md")
     assert r.returncode == 1
-    assert r.stderr.strip()
+    assert "no units" in r.stderr.lower()
+    assert "plan.md" in r.stderr
+    assert r.stdout == ""
     assert not (run / "state.json").exists()
 
 
@@ -85,7 +87,8 @@ def test_us11_start_with_missing_plan_refused(env):
     run, _ = env
     r = wf("start", run, "--plan", "nope.md")
     assert r.returncode == 1
-    assert r.stderr.strip()
+    assert "nope.md" in r.stderr
+    assert r.stdout == ""
     assert not (run / "state.json").exists()
 
 
