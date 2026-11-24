@@ -1,6 +1,8 @@
 """Plain-text views of a task's state and of its decision log."""
 
 import importlib.util
+import sys
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -9,6 +11,7 @@ import decisions
 import engine
 import graph
 from autonodes import Ctx
+from effects import checks, gitops, reviews
 
 _EVIDENCE = {
     "correct": ["findings"],
@@ -105,3 +108,26 @@ def _logger(run: Path) -> object:
         path.write_text(decisions.append_text(path.read_text() if path.is_file() else "", cells))
 
     return log
+
+
+def default_ctx(run: Path) -> Ctx:
+    """Return the Ctx of a run folder wired to the real reviews, tests, git, evidence and decision log."""
+    repo = repo_for(run)
+    venv = repo / ".venv" / "bin" / "python"
+    return Ctx(
+        run=run,
+        repo=repo,
+        python=venv if venv.exists() else Path(sys.executable),
+        start_review=reviews.start_pass,
+        collect_review=reviews.collect_pass,
+        run_review=reviews.run_pass,
+        tests=checks.run_pytest,
+        touched=checks.tests_touched,
+        source=reviews.review_source,
+        commit=gitops.commit,
+        evidence=_measure(),
+        diff=gitops.worktree_diff,
+        file_at=gitops.file_at,
+        log=_logger(run),
+        now=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"),
+    )
