@@ -329,3 +329,20 @@ def test_us33_complete_false_for_subtract_record_with_failed_tests():
 
 def test_us33_complete_false_for_subtract_record_without_sha():
     assert er.complete(er.subtract_record("", [], [])) is False
+
+
+def test_us34_changed_tests_lists_edited_and_new_tests():
+    before = "def test_a():\n    assert 1\n\ndef test_b():\n    assert 1\n"
+    after = "def test_a():\n    assert 1\n\ndef test_b():\n    assert 2\n\ndef test_c():\n    assert 3\n"
+    assert er.changed_tests(before, after, "t.py") == ["t.py::test_b", "t.py::test_c"]
+
+
+def test_us34_changed_tests_with_no_before_lists_every_test():
+    after = "def helper():\n    pass\n\ndef test_a():\n    assert 1\n\ndef test_b():\n    assert 1\n"
+    assert er.changed_tests(None, after, "t.py") == ["t.py::test_a", "t.py::test_b"]
+
+
+def test_us34_changed_tests_ignores_changed_helper():
+    before = "def helper():\n    return 1\n\ndef test_a():\n    assert helper()\n"
+    after = "def helper():\n    return 2\n\ndef test_a():\n    assert helper()\n"
+    assert er.changed_tests(before, after, "t.py") == []
