@@ -10,7 +10,7 @@ The main orchestrator classifies every task before doing anything else and state
 - is easy to test (a few small tests at most),
 - doesn't change LLM or agent behaviour (prompts, tool definitions, model calls), since that needs evals.
 
-Route: on the task's own branch off `dev` (section 4b), the unit loop of section 4 in its fast lane, then the branch finish (section 4) → PR into `dev`, reviewed as a whole by pass `pr` → merged.
+Route: on the task's own branch off `dev` (section 4b), planned as in section 4, Plan (a small task gets a one-unit plan, step 2), the unit loop of section 4 in its fast lane, then the branch finish (section 4) → PR into `dev`, reviewed as a whole by pass `pr` → merged.
 
 **Parallel mode** (complex, splits into independent pieces). The task can be split into pieces that can be built at the same time: no piece changes a function or contract that another piece changes or relies on. Pieces that touch the same file in different functions count as independent. Clearly defined and easy to evaluate, even if it touches many files.
 
