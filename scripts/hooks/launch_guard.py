@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 
+WORKSPACE = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(WORKSPACE / "scripts" / "workflow"))
+
+from effects import claimfiles  # noqa: E402
+
 WORKFLOW_AGENTS = ("qa", "implementer")
-RELEASE = re.compile(r"\bwf(\.py)?\s+release\b")
 RELEASE = re.compile(r"\bwf(\.py)?\s+release\b")
 
 
@@ -47,3 +52,23 @@ def _load_state(claim: dict) -> dict | None:
         return json.loads((Path(claim["run"]) / "state.json").read_text())
     except (OSError, ValueError, KeyError):
         return None
+
+
+def main(stdin: str, active: Path) -> int:
+    """Return 2 and print the reason to stderr when the JSON event in `stdin` is denied, else 0.
+
+    Looks up the session's claim in `active`; unreadable input or state allows."""
+    try:
+        event = json.loads(stdin)
+        names = claimfiles.owned_by(active, event.get("session_id"))
+        claim = claimfiles.read(active, names[0]) if names else None
+        allowed, reason = decide(event, claim, _load_state(claim) if claim else None)
+    except Exception:
+        return 0
+    if not allowed:
+        print(reason, file=sys.stderr)
+    return 0 if allowed else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.stdin.read(), WORKSPACE / ".claude" / "runs" / ".active"))
