@@ -239,13 +239,14 @@ def test_us18_commit_fix_ignores_tests_commits_of_other_units(tmp_path):
     assert calls["evidence"][0][4] == "mine222"
 
 
-def test_us18_commit_subtract_passes_no_tests_commit(tmp_path):
+def test_us18_commit_subtract_ignores_earlier_tests_commit(tmp_path):
     ctx, state, calls = _make(tmp_path)
     state = _with_tests_commit(state, "t111111")
     state["history"].append({"node": "subtract", "result": {"removed": "x", "files": {}}})
     state["history"].append({"node": "subtract_check", "outcome": "pass", "result": {"touched": [], "failed": []}})
     autonodes.HANDLERS["commit_subtract"](state, ctx)
-    assert calls["evidence"] == [(ctx.repo, tmp_path, SHA, ctx.python, None)]
+    assert calls["evidence"] == []
+    assert json.loads((tmp_path / f"evidence-{SHA}.json").read_text())["kind"] == "subtract"
 
 
 def test_us18_commit_tests_fixes_imports_of_touched_paths_before_committing(tmp_path):
