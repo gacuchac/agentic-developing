@@ -111,6 +111,11 @@ def _touched_tests(repo: Path, commit: str | None, sha: str) -> list[str]:
     return [p for p in paths if "tests" in Path(p).parts[:-1]]
 
 
+def _architecture(run: Path) -> str:
+    path = run / "architecture.md"
+    return path.read_text() if path.is_file() else ""
+
+
 def measure(repo: Path, run: Path, sha: str, python: Path, tests_commit: str | None = None) -> dict:
     """Return the evidence record of the fix commit `sha` in `repo` (fields: see architecture.md).
 
@@ -131,7 +136,7 @@ def measure(repo: Path, run: Path, sha: str, python: Path, tests_commit: str | N
         "failed": failed,
         "breaks": declared_breaks(run),
         "tests_touched": _touched_tests(repo, commit, sha),
-        "uncovered": sorted(contracts.uncovered(names, (run / "architecture.md").read_text())),
+        "uncovered": sorted(contracts.uncovered(names, _architecture(run))),
         "code_changed": any("tests" not in Path(p).parts[:-1] and not p.endswith(".md") for p in paths),
     }
 
