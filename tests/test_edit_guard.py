@@ -158,3 +158,54 @@ def test_us14_main_allows_session_without_claim(tmp_path):
 def test_us14_main_allows_unreadable_input(tmp_path):
     w = _world(tmp_path)
     assert guard.main("not json", _active(w, tmp_path), w.ws) == 0
+
+
+def _two_tasks(w: World, tmp_path: Path) -> Path:
+    active = tmp_path / "active2"
+    w.second = _claim("s1", w.ws / ".claude/runs/proj/t3", w.ws / ".worktrees/proj/t3")
+    claimfiles.create(active, "proj--t1.json", w.mine)
+    claimfiles.create(active, "proj--t3.json", w.second)
+    claimfiles.create(active, "proj--t2.json", w.other)
+    return active
+
+
+def _register(active: Path, agent_id: str, claim: dict) -> None:
+    (active / "agents").mkdir(parents=True, exist_ok=True)
+    entry = {"session": "s1", "run": claim["run"], "step_id": "u1-write-1", "agent": "qa"}
+    (active / "agents" / f"{agent_id}.json").write_text(json.dumps(entry))
+
+
+def _agent_event(path: str, agent_id: str | None, session: str = "s1") -> str:
+    event = {"session_id": session, "tool_name": "Edit", "tool_input": {"file_path": path}}
+    return json.dumps({**event, "agent_id": agent_id} if agent_id else event)
+
+
+def test_us21_registered_agent_stays_in_its_own_task(tmp_path):
+    w = _world(tmp_path)
+    active = _two_tasks(w, tmp_path)
+    _register(active, "aA", w.mine)
+    _register(active, "aB", w.second)
+    for agent, own, foreign in (("aA", w.mine, w.second), ("aB", w.second, w.mine)):
+        for folder in (own["checkout"], own["run"]):
+            assert guard.main(_agent_event(folder + "/f.py", agent), active, w.ws) == 0, (agent, folder)
+        for folder in (foreign["checkout"], foreign["run"]):
+            assert guard.main(_agent_event(folder + "/f.py", agent), active, w.ws) == 2, (agent, folder)
+
+
+def test_us21_main_session_edits_all_its_tasks_but_not_other_sessions(tmp_path):
+    w = _world(tmp_path)
+    active = _two_tasks(w, tmp_path)
+    for claim in (w.mine, w.second):
+        for folder in (claim["checkout"], claim["run"]):
+            assert guard.main(_agent_event(folder + "/f.py", None), active, w.ws) == 0, folder
+    for folder in (w.other["checkout"], w.other["run"]):
+        assert guard.main(_agent_event(folder + "/f.py", None), active, w.ws) == 2, folder
+
+
+def test_us21_unregistered_agent_is_treated_like_main_session(tmp_path):
+    w = _world(tmp_path)
+    active = _two_tasks(w, tmp_path)
+    _register(active, "aA", w.mine)
+    for claim in (w.mine, w.second):
+        assert guard.main(_agent_event(claim["checkout"] + "/f.py", "ghost"), active, w.ws) == 0
+    assert guard.main(_agent_event(w.other["checkout"] + "/f.py", "ghost"), active, w.ws) == 2
