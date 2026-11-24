@@ -203,8 +203,19 @@ def _pass_reviews(name: str, state: dict, ctx: Ctx) -> list[dict]:
     return [first, _judge(name, ctx.run_review(args, ctx.repo), state, ctx)]
 
 
+def _decided_since_tests_commit(state: dict) -> bool:
+    nodes = [e.get("node") for e in st.unit_history(state)]
+    last = max((i for i, n in enumerate(nodes) if n == "commit_tests"), default=-1)
+    return "tests_decide" in nodes[last + 1 :]
+
+
 def _review(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
-    """Judge each of the node's review passes; outcome MALFORMED, else CHANGES if any pass has FAILs, else PASS."""
+    """Judge each of the node's review passes; outcome MALFORMED, else CHANGES if any pass has FAILs, else PASS.
+
+    A `tests_review` already decided since the unit's latest test commit gives PASS without a review.
+    """
+    if state["node"] == "tests_review" and _decided_since_tests_commit(state):
+        return "PASS", {"verdict": "PASS", "reviews": [], "decided": True}, state
     per_pass = [_pass_reviews(name, state, ctx) for name in graph.REVIEW_PASSES[state["node"]]]
     finals = {rs[-1]["verdict"] for rs in per_pass}
     outcome = next(v for v in ("MALFORMED", "CHANGES") if v in finals) if finals - {"PASS"} else "PASS"
