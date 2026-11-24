@@ -68,3 +68,17 @@ def unit_lane(unit_md: str) -> str:
 def declared_breaks(unit_md: str) -> list[str]:
     """Return the comma-separated, stripped ids of the unit's `Breaks:` line, or [] without one."""
     return [i.strip() for i in (_field(unit_md, "Breaks") or "").split(",") if i.strip()]
+
+
+def unit_files(unit_md: str) -> list[str]:
+    """Return every backticked name after `Files:` on the first line that has it, in order; [] when none."""
+    for line in unit_md.splitlines():
+        if "Files:" in line:
+            return re.findall(r"`([^`]+)`", line.split("Files:", 1)[1])
+    return []
+
+
+def unit_estimate(unit_md: str) -> int | None:
+    """Return the number after `Estimate:` (optional `~` before it), or None without such a line or number."""
+    found = re.search(r"^[ \t]*(?:- )?Estimate:[ \t]*~?(\d+)", unit_md, re.MULTILINE)
+    return int(found.group(1)) if found else None
