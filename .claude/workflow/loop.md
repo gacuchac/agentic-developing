@@ -71,7 +71,15 @@ What the engine does on its own, between those stops: writes the unit, runs the 
 ### Plan (main orchestrator, for every task)
 
 1. **Pick ready tasks (just-in-time decomposition).** A task is ready when every task it depends on is merged into dev. Decompose only ready tasks, so a contract or architecture change upstream never forces a plan to be redone.
-2. **Decompose.** For each ready task, the main orchestrator calls `decomposer`, up to 3 at a time. Each reads the ask and the code on dev and writes `plan.md` (format in section 7.4): user stories, subtasks with done lines, the files and functions it will touch, the contracts it touches, how it expects to solve the task, an Evals flag and open questions. Workflow orchestrators never decompose; keeping every decomposition in the main session is what lets the plans be cross-checked.
+2. **Decompose, or write a one-unit plan.** A ready task is small when all of these hold, judged from the ask and the code on dev:
+   - one goal: one story, delivered as one test commit and one code commit;
+   - about 50 lines or fewer of non-test code;
+   - 2 or fewer non-test files, plus their test files;
+   - its lane is `fast` and its Evals flag is no: no contract, schema or migration change, no risky seam, no security change, no change to LLM or agent behaviour.
+
+   For a small task the main orchestrator writes `plan.md` itself, in the decomposer's format (`decomposer.md`), with one subtask and real `Estimate:` and `Files:` lines, and skips the plan review (step 5). The engine's scope check is the backstop for a low estimate: a change over the larger of 30 lines and twice the estimate, or one that touches a file the plan doesn't name, goes to the `impl` review before it is committed.
+
+   Every other task goes to a `decomposer`, up to 3 at a time. Each reads the ask and the code on dev and writes `plan.md` (format in `decomposer.md`): user stories, subtasks with done lines, the files and functions it will touch, the contracts it touches, how it expects to solve the task, an Evals flag and open questions. Workflow orchestrators never decompose or write plans; keeping every plan in the main session is what lets the plans be cross-checked.
 3. **Read each plan.** If its Contracts section lists any changed function, or an `architecture-change-*.md` file exists, apply the architecture stop rule below. If Open questions holds anything that blocks the plan, bring the questions to me.
 4. **Cross-check.** The main orchestrator compares the new plans with each other and with the plans of tasks still building, and writes what it found to `cross-check.md` in the board's run folder. A clash is two plans changing the same function or contract, one plan relying on a function or contract that another changes, or two plans building the same thing. Touching the same file in different functions is not a clash. It sends each clash back to the decomposers concerned with full context (their own plan, the other plan and the clash), then checks again. After 3 rounds with a clash left, it builds one of the two tasks now and holds the other back, to be decomposed again once the first is merged; if neither can wait, it brings the clash to me.
 5. **Review each plan.** `codex-reviewer` runs pass `plan` (GPT-6 Sol). If the verdict is `CHANGES`, send the findings back to `decomposer` once, and cross-check that plan again if it changed.
@@ -224,7 +232,7 @@ A light pass for time-boxed demos (about 90 minutes). It keeps the checkpoints t
 
 Route, one task at a time, in the main session:
 1. Check the project's main checkout is on dev, clean and up to date (section 4b). Create `feature/<task-id>` (or `bugfix/<task-id>`) off dev. Write `ask.md` to `.claude/runs/<project>/<task-id>/`.
-2. Call one `decomposer` to write `plan.md`. No cross-check and no plan review. If its Contracts section lists any changed function, or it reports `ARCHITECTURE CHANGE`, apply the architecture stop rule.
+2. Call one `decomposer` to write `plan.md`, or, for a small task (section 4, Plan step 2), write the one-unit plan yourself. No cross-check and no plan review. If its Contracts section lists any changed function, or it reports `ARCHITECTURE CHANGE`, apply the architecture stop rule.
 3. **Checkpoint:** show me `plan.md` and wait until I approve it. Tell me in a few lines what to check.
 4. `qa` writes tests; the main session commits them (commit cadence and gates, section 4). **Checkpoint:** confirm they fail because the feature is missing, and say so.
 5. `implementer` builds until green; the main session reruns the full suite and commits. If tests fail, back to the implementer.
