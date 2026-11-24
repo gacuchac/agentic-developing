@@ -82,3 +82,20 @@ def unit_estimate(unit_md: str) -> int | None:
     """Return the number after `Estimate:` (optional `~` before it), or None without such a line or number."""
     found = re.search(r"^[ \t]*(?:- )?Estimate:[ \t]*~?(\d+)", unit_md, re.MULTILINE)
     return int(found.group(1)) if found else None
+
+
+def scope_reasons(unit_md: str, sizes: dict[str, int]) -> list[str]:
+    """Return why a change must take the full lane, `[]` when none.
+
+    `sizes` maps each changed code file to its changed lines. Gives `outside: <paths>` for paths the
+    unit's files don't name (equal to a listed name or ending in `/<name>`), then `size: <n> lines,
+    limit <m>` when the total passes max(30, twice the estimate).
+    """
+    names = unit_files(unit_md)
+    outside = [p for p in sizes if not any(p == n or p.endswith("/" + n) for n in names)]
+    limit = max(30, 2 * (unit_estimate(unit_md) or 0))
+    total = sum(sizes.values())
+    reasons = [f"outside: {', '.join(outside)}"] if outside else []
+    if total > limit:
+        reasons.append(f"size: {total} lines, limit {limit}")
+    return reasons
