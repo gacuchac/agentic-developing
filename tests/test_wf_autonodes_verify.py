@@ -146,3 +146,10 @@ def test_us10_verify_defaults_to_full_without_lane(tmp_path):
     ctx, _ = make_ctx(tmp_path)
     outcome, _, _ = autonodes.HANDLERS["verify"](make_state(disputed=[]), ctx)
     assert outcome == "full"
+
+
+def test_us10_red_run_expected_when_added_is_a_file_and_its_tests_fail(tmp_path):
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": list(ADDED)})
+    outcome, _, _ = autonodes.HANDLERS["red_run"](make_state(added=["tests/test_a.py"]), ctx)
+    assert outcome == "expected"
+
