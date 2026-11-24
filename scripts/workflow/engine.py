@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import contracts
 import graph
 import state as st
 from autonodes import HANDLERS, Ctx
@@ -69,3 +70,32 @@ def _failures(state: dict, history: list[dict]) -> list[str]:
 
 def _docs(state: dict, run: Path) -> list[str]:
     return [(run / n).read_text() for n in (state["plan"], "ask.md") if (run / n).is_file()]
+
+
+def decision_facts(state: dict, ctx: Ctx) -> dict:
+    """Return the facts `evidence.check_evidence` reads, built from the unit's history and the run folder.
+
+    Keys: fails, passes (id to pass) and capped from the last review entry; failures (last run entry's
+    failed, plus disputed at fail_decide, or tests at red_decide); docs (plan and ask.md texts); read
+    (path to text, at state["head"] at tests_decide, else the working tree); run; resume; uncovered.
+    """
+    history = st.unit_history(state)
+    sha = state["head"] if state["node"] == "tests_decide" else None
+    arch = ctx.run / "architecture.md"
+    uncovered = contracts.uncovered(
+        contracts.changed_signatures(ctx.diff(ctx.repo)), arch.read_text() if arch.is_file() else ""
+    )
+    return {
+        **_finding_facts(history),
+        "failures": _failures(state, history),
+        "docs": _docs(state, ctx.run),
+        "read": lambda path: ctx.file_at(ctx.repo, path, sha),
+        "run": ctx.run,
+        "resume": state["pending"].get("resume", []),
+        "uncovered": uncovered,
+    }
+
+
+def legal(state: dict, ctx: Ctx) -> list[str]:
+    """Return the options the current node offers, from `graph.legal_options` and the decision facts."""
+    return graph.legal_options(state["node"], st.unit_history(state), decision_facts(state, ctx)["uncovered"])
