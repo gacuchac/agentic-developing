@@ -186,3 +186,31 @@ def test_us10_commit_message_no_parentheses_gives_title_alone():
 def test_us10_commit_message_ignores_body_lines():
     md = "### 3. graph.py: edges (US-7)\nNote (US-99) here\nFix: not directly after\nmore"
     assert units.commit_message(md) == "US-7: graph.py: edges"
+
+
+def test_us10_test_commit_message_one_story():
+    assert units.test_commit_message("### 3. Do the thing (US-9)\nEstimate: 1") == "test(US-9): Do the thing"
+
+
+def test_us10_test_commit_message_story_list():
+    assert units.test_commit_message("### 3. Do the thing (US-9, US-10)") == "test(US-9, US-10): Do the thing"
+
+
+def test_us10_test_commit_message_fix_unit():
+    unit = "### 3. Do the thing (US-9)\nFix: the bug\nmore"
+    assert units.test_commit_message(unit) == "test(US-9): Fix the bug: Do the thing"
+
+
+def test_us10_test_commit_message_without_stories():
+    assert units.test_commit_message("### 3. Do the thing") == "test: Do the thing"
+
+
+def test_us10_commit_message_story_list_is_valid_subject():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "hooks" / "commit_msg.py"
+    spec = importlib.util.spec_from_file_location("commit_msg_us10", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.valid_subject(units.commit_message("### 3. Do the thing (US-9, US-10)"))

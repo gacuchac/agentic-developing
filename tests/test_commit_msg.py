@@ -73,3 +73,8 @@ def test_x4_main_invalid_message_prints_hint_and_returns_one(tmp_path, capsys):
 
 def test_x4_main_empty_text_after_colon_is_invalid(tmp_path):
     assert cm.main([_msg(tmp_path, "US-4:\n")]) == 1
+
+
+@pytest.mark.parametrize("subject", ["US-9, US-10: x", "test(US-9, US-10): x"])
+def test_us10_valid_story_lists(subject):
+    assert cm.valid_subject(subject) is True
