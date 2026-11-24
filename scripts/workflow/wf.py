@@ -8,17 +8,19 @@ import json
 import sys
 import time
 from collections import Counter
+from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
 
 import agent_steps
+import claims
 import decisions
 import engine
 import graph
 import state as st
 import units
 from autonodes import Ctx
-from effects import checks, gitops, reviews
+from effects import checks, gitops, procs, reviews
 
 _EVIDENCE = {
     "correct": ["findings"],
@@ -158,6 +160,29 @@ def start_state(run: Path, plan: str, ctx: Ctx) -> tuple[dict | None, list[str]]
         return None, [str(e).strip()]
     state = st.new_state(f"{run.parent.name}/{run.name}", branch, launch, plan)
     return engine.advance(state, ctx), []
+
+
+def identity(env: Mapping[str, str]) -> tuple[str, int]:
+    """Return (CLAUDE_CODE_SESSION_ID, int(CLAUDE_PID)) from env; ("", 0) when either is missing."""
+    session, pid = env.get("CLAUDE_CODE_SESSION_ID", ""), env.get("CLAUDE_PID", "")
+    return (session, int(pid)) if session and pid.isdigit() else ("", 0)
+
+
+def run_claim(run: Path, env: Mapping[str, str], ctx: Ctx) -> list[str]:
+    """Claim the run's task for the session in env; return [] or one error line naming the live holder.
+
+    With an empty identity no claim is made and [] is returned.
+    """
+    session, pid = identity(env)
+    if not session:
+        return []
+    branch, _ = gitops.launch_info(ctx.repo)
+    claim = claims.make_claim(session, pid, procs.pid_start(pid) or "", str(run), str(ctx.repo), branch, ctx.now())
+    name = claims.claim_name(run.parent.name, run.name)
+    outcome, holder = claims.acquire(run.parents[1] / ".active", name, claim, procs.pid_alive, procs.pid_start, print)
+    if outcome != "refused":
+        return []
+    return [f"{name} is held by session {holder['session']} on {holder['branch']} since {holder['since']}"]
 
 
 def _parser() -> argparse.ArgumentParser:
