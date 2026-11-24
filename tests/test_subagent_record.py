@@ -302,3 +302,62 @@ def test_us21_engine_python_is_the_workspace_venv_interpreter_when_present(hook,
 
 def test_us21_engine_python_falls_back_to_python3_without_a_venv(hook, tmp_path):
     assert hook.engine_python(tmp_path) == "python3"
+
+
+OTHER = {"tests_added": ["tests/test_y.py"], "red_run": {"failed": ["test_y"], "reason_expected": True}, "left_out": []}
+EXAMPLE = {"tests_added": ["x"], "red_run": {"failed": [], "reason_expected": False}, "left_out": []}
+
+
+def _silent_event(transcript: Path) -> str:
+    return json.dumps(
+        {
+            "session_id": "s1",
+            "agent_id": "n1",
+            "agent_type": "qa",
+            "agent_transcript_path": str(transcript),
+            "last_assistant_message": "",
+        }
+    )
+
+
+def _record(role: str, parts) -> str:
+    return json.dumps({"type": role, "message": {"role": role, "content": parts}})
+
+
+def _handback(result: dict) -> list:
+    return [{"type": "tool_use", "name": "SubagentHandback", "input": {"message": "Report\n" + _block(json.dumps(result))}}]
+
+
+def _write_transcript(transcript: Path, run: Path, *assistant_records: str) -> None:
+    prompt = _prompt(run) + "Reply with:\n" + _block(json.dumps(EXAMPLE)) + "\n"
+    transcript.write_text("\n".join([_record("user", prompt), *assistant_records]) + "\n")
+
+
+def test_us21_handback_call_block_in_transcript_is_recorded_not_the_prompt_example(hook, tmp_path):
+    active, run, transcript = _nested_setup(tmp_path, "placeholder")
+    _write_transcript(transcript, run, _record("assistant", _handback(OTHER)))
+    rec = Recorder()
+    assert hook.main(_silent_event(transcript), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", OTHER)]
+
+
+def test_us21_prompt_example_block_alone_is_never_recorded_from_transcript(hook, tmp_path):
+    active, run, transcript = _nested_setup(tmp_path, "placeholder")
+    _write_transcript(transcript, run, _record("assistant", _handback(OTHER)))
+    rec = Recorder()
+    assert hook.main(_silent_event(transcript), active, rec) == 0
+    _write_transcript(transcript, run, _record("assistant", [{"type": "text", "text": "no block here"}]))
+    assert hook.main(_silent_event(transcript), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", OTHER)]
+
+
+def test_us21_transcript_text_block_found_and_later_handback_block_wins(hook, tmp_path):
+    active, run, transcript = _nested_setup(tmp_path, "placeholder")
+    text = _record("assistant", [{"type": "text", "text": "Done\n" + _block(json.dumps(EXAMPLE | {"left_out": ["t"]}))}])
+    _write_transcript(transcript, run, text)
+    rec = Recorder()
+    assert hook.main(_silent_event(transcript), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", EXAMPLE | {"left_out": ["t"]})]
+    _write_transcript(transcript, run, text, _record("assistant", _handback(OTHER)))
+    assert hook.main(_silent_event(transcript), active, rec) == 0
+    assert rec.calls[1:] == [(run, "u3-write-1", OTHER)]
