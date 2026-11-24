@@ -11,9 +11,9 @@ def _git(repo: Path, *args: str) -> str:
 
 def commit(repo: Path, message: str, paths: list[str] | None = None) -> str:
     """Stage `paths` (all when None), commit only those, return the HEAD sha; RuntimeError(stderr) if git refuses."""
-    only = ["--", *paths] if paths else []
+    only = [] if paths is None else ["--", *paths]
     try:
-        _git(repo, "add", "-A", *only)
+        _git(repo, "add", *(["-A"] if paths is None else only))
         _git(repo, "commit", "-m", message, *only)
     except subprocess.CalledProcessError as e:
         raise RuntimeError(e.stderr) from e
@@ -27,3 +27,11 @@ def file_at(repo: Path, path: str, sha: str | None) -> str | None:
     except (OSError, subprocess.CalledProcessError):
         return None
 
+
+
+def worktree_diff(repo: Path) -> str:
+    """Return `git diff HEAD` plus each untracked file as a new-file section; the index is untouched."""
+    out = _git(repo, "diff", "HEAD")
+    for p in _git(repo, "ls-files", "--others", "--exclude-standard").splitlines():
+        out += f"--- /dev/null\n+++ b/{p}\n+" + "\n+".join((repo / p).read_text().splitlines()) + "\n"
+    return out
