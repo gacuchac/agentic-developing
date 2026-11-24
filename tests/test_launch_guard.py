@@ -175,3 +175,12 @@ def test_us21_allows_prompt_naming_a_run_the_session_does_not_hold(tmp_path):
     active, _ = _multi(tmp_path, [QA_A])
     other = str(tmp_path / "elsewhere")
     assert guard.main(_launch("qa", _prompt("zzz-1", run=other)), active) == 0
+
+
+DECIDE_STATE = {"task": "t", "node": "tests_decide", "pending": {"kind": "decide"}}
+
+
+def test_us21_denies_step_launch_while_engine_waits_at_a_decision():
+    allowed, reason = guard.decide(_agent("qa", "u3-fix-2"), CLAIM, DECIDE_STATE)
+    assert (allowed, reason) == (False, "Pending is a decision at tests_decide; no agent step is open.")
+
