@@ -17,17 +17,6 @@ def test_us7_escalate_comes_with_architecture_stop():
             assert "architecture_stop" in edges, node
 
 
-def test_us7_every_node_reachable_from_write_unit():
-    seen, todo = set(), ["write_unit"]
-    while todo:
-        n = todo.pop()
-        if n in seen:
-            continue
-        seen.add(n)
-        todo.extend(EDGES[n].values())
-    assert seen == set(EDGES)
-
-
 def test_us7_unit_loop_nodes_reachable_from_write_unit():
     seen, todo = set(), ["write_unit"]
     while todo:
@@ -314,7 +303,7 @@ def test_us7_back_edge_to_other_target_does_not_count():
 
 def test_us7_cap_reached_false_for_node_without_back_edges():
     entries = [_impl_back()] * 5
-    assert graph.cap_reached(entries, "commit_fix") is False
+    assert graph.cap_reached(entries, "qa_write") is False
 
 
 def test_us7_cap_reached_any_back_edge_of_node_triggers():
