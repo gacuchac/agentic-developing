@@ -165,7 +165,7 @@ def test_us10_int_not_accepted_as_bool():
 
 
 def test_us10_several_bad_fields_give_one_error_each():
-    d = {"tests_added": ["a", 3], "red_run": {"failed": "x", "reason_expected": "yes"}}
+    d = {"tests_added": ["a", 3], "red_run": {"failed": "x", "reason_expected": "yes"}, "left_out": []}
     errs = validate_result("qa", d)
     assert len(errs) == 3
     for path in ("tests_added[1]", "red_run.failed", "red_run.reason_expected"):
@@ -180,7 +180,7 @@ def test_us10_several_bad_files_each_named():
 
 def test_us10_errors_are_strings():
     errs = validate_result("qa", {})
-    assert len(errs) == 2 and all(isinstance(e, str) for e in errs)
+    assert len(errs) == 3 and all(isinstance(e, str) for e in errs)
 
 
 @pytest.mark.parametrize("data", [None, [], [1, 2], "text", 5, True])
