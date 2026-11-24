@@ -42,16 +42,28 @@ def path_allowed(
     return False, f"{path} is outside your task; edit only inside {claim['checkout']}."
 
 
+def _verdict(path: str, own: list[dict], others: list[dict], workspace: Path) -> tuple[bool, str]:
+    """Return (allowed, reason) for `path`: allowed when `path_allowed` allows it for any claim in `own`."""
+    if not own:
+        return True, ""
+    results = [
+        path_allowed(path, c, os.path.normpath(c["checkout"]) == str(workspace), others, str(workspace)) for c in own
+    ]
+    return next((r for r in results if r[0]), results[0])
+
+
 def _decide(event: dict, active: Path, workspace: Path) -> tuple[bool, str]:
     """Return (allowed, reason) for the Edit, Write or NotebookEdit call in `event`."""
     key = EDIT_TOOLS.get(event.get("tool_name"))
     if key is None:
         return True, ""
-    names = claimfiles.owned_by(active, event.get("session_id"))
-    claim = claimfiles.read(active, names[0]) if names else None
-    others = [c for p in active.glob("*.json") if (c := claimfiles.read(active, p.name)) and c != claim]
-    is_root = claim is not None and os.path.normpath(claim["checkout"]) == str(workspace)
-    return path_allowed(event["tool_input"][key], claim, is_root, others, str(workspace))
+    claims = [c for p in active.glob("*.json") if (c := claimfiles.read(active, p.name))]
+    mine = [c for c in claims if c.get("session") == event.get("session_id")]
+    entry = claimfiles.read(active / "agents", f"{event.get('agent_id')}.json")
+    own = [c for c in mine if entry and c["run"] == entry["run"]]
+    if own:
+        return _verdict(event["tool_input"][key], own, [c for c in claims if c not in own], workspace)
+    return _verdict(event["tool_input"][key], mine, [c for c in claims if c not in mine], workspace)
 
 
 def main(stdin: str, active: Path, workspace: Path) -> int:
