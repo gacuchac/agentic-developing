@@ -28,51 +28,94 @@ def test_us7_every_node_reachable_from_write_unit():
     assert seen == set(EDGES)
 
 
-def test_us7_count_lines_ok_commits_and_commit_done_goes_to_reviews():
-    assert EDGES["count_lines"]["ok"] == "commit"
-    assert EDGES["commit"]["done"] == "commit_reviews"
+def test_us7_unit_loop_nodes_reachable_from_write_unit():
+    seen, todo = set(), ["write_unit"]
+    while todo:
+        n = todo.pop()
+        if n in seen:
+            continue
+        seen.add(n)
+        todo.extend(EDGES[n].values())
+    unit_loop = {
+        "write_unit", "qa_write", "red_run", "red_decide", "commit_tests", "implement", "tests_review",
+        "tests_decide", "qa_fix", "verify", "fail_decide", "impl_review", "impl_decide", "commit_fix", "next_unit",
+        "user", "done",
+    }  # fmt: skip
+    assert unit_loop <= seen
+
+
+def test_us7_removed_nodes_are_gone():
+    for node in ("count_lines", "run_tests", "commit", "commit_reviews", "commit_decide"):
+        assert node not in EDGES, node
 
 
 def test_us7_stops_go_to_user():
     assert graph.STOPS == {"escalate": "user", "architecture_stop": "user"}
 
 
-def test_us7_red_run_edges():
-    assert EDGES["red_run"] == {"expected": "tests_review", "unexpected": "red_decide"}
+def test_us7_red_run_expected_commits_tests_unexpected_decides():
+    assert EDGES["red_run"] == {"expected": "commit_tests", "unexpected": "red_decide"}
 
 
-def test_us7_run_tests_fail_goes_to_fail_decide():
-    assert EDGES["run_tests"]["pass"] == "count_lines"
-    assert EDGES["run_tests"]["fail"] == "fail_decide"
+def test_us7_red_decide_tests_wrong_rewrites():
+    assert EDGES["red_decide"]["tests_wrong"] == "qa_write"
 
 
-def test_us7_fail_decide_code_wrong_implements_tests_wrong_rewrites():
+def test_us7_commit_tests_done_goes_to_implement_refused_back_to_qa_write():
+    assert EDGES["commit_tests"] == {"done": "implement", "refused": "qa_write"}
+
+
+def test_us7_implement_goes_to_tests_review():
+    assert EDGES["implement"] == {"recorded": "tests_review"}
+
+
+def test_us7_tests_review_edges():
+    assert EDGES["tests_review"] == {"PASS": "verify", "CHANGES": "tests_decide", "MALFORMED": "user"}
+
+
+def test_us7_tests_decide_correct_goes_to_qa_fix_dismissed_go_to_verify():
+    assert EDGES["tests_decide"]["correct"] == "qa_fix"
+    assert EDGES["tests_decide"]["overstated"] == "verify"
+    assert EDGES["tests_decide"]["wrong"] == "verify"
+
+
+def test_us7_qa_fix_recorded_goes_to_commit_tests():
+    assert EDGES["qa_fix"] == {"recorded": "commit_tests"}
+
+
+def test_us7_verify_outcomes():
+    assert EDGES["verify"] == {
+        "fast": "commit_fix",
+        "full": "impl_review",
+        "tests_touched": "implement",
+        "fail": "fail_decide",
+    }
+
+
+def test_us7_fail_decide_code_wrong_implements_tests_wrong_goes_to_qa_fix():
     assert EDGES["fail_decide"]["code_wrong"] == "implement"
-    assert EDGES["fail_decide"]["tests_wrong"] == "qa_write"
+    assert EDGES["fail_decide"]["tests_wrong"] == "qa_fix"
 
 
-def test_us7_commit_reviews_changes_goes_to_commit_decide():
-    assert EDGES["commit_reviews"]["CHANGES"] == "commit_decide"
-    assert EDGES["commit_reviews"]["PASS"] == "next_unit"
-    assert EDGES["commit_reviews"]["MALFORMED"] == "user"
+def test_us7_impl_review_edges():
+    assert EDGES["impl_review"] == {"PASS": "commit_fix", "CHANGES": "impl_decide", "MALFORMED": "user"}
 
 
-def test_us7_next_unit_last_goes_to_full_suite():
-    assert EDGES["next_unit"] == {"more": "write_unit", "last": "full_suite"}
+def test_us7_impl_decide_correct_implements_dismissed_commit():
+    assert EDGES["impl_decide"]["correct"] == "implement"
+    assert EDGES["impl_decide"]["overstated"] == "commit_fix"
+    assert EDGES["impl_decide"]["wrong"] == "commit_fix"
 
 
-def test_us7_commit_refused_stalls_on_commit():
-    assert EDGES["commit"]["refused"] == "commit"
+def test_us7_commit_fix_done_goes_to_next_unit_refused_to_implement():
+    assert EDGES["commit_fix"] == {"done": "next_unit", "refused": "implement"}
 
 
-def test_us7_count_lines_over_returns_to_implement():
-    assert EDGES["count_lines"]["over"] == "implement"
+def test_us7_next_unit_more_loops_last_and_finished_reach_done():
+    assert EDGES["next_unit"] == {"more": "write_unit", "last": "done", "finished": "done"}
 
 
-def test_us7_review_decisions_dismissed_skip_ahead():
-    assert EDGES["tests_decide"]["wrong"] == "implement"
-    assert EDGES["impl_decide"]["wrong"] == "run_tests"
-    assert EDGES["commit_decide"]["wrong"] == "next_unit"
+def test_us7_later_review_decisions_dismissed_skip_ahead():
     assert EDGES["aa_decide"]["wrong"] == "done"
 
 
@@ -85,56 +128,23 @@ def test_us7_edges_match_the_unit_loop_table():
     expected = {
         "write_unit": {"done": "qa_write"},
         "qa_write": {"recorded": "red_run"},
-        "red_run": {"expected": "tests_review", "unexpected": "red_decide"},
+        "red_run": {"expected": "commit_tests", "unexpected": "red_decide"},
         "red_decide": {"tests_wrong": "qa_write"},
-        "tests_review": {
-            "PASS": "implement",
-            "CHANGES": "tests_decide",
-            "MALFORMED": "user",
-        },
-        "tests_decide": {
-            "correct": "qa_write",
-            "overstated": "implement",
-            "wrong": "implement",
-        },
-        "implement": {"recorded": "impl_review"},
-        "impl_review": {
-            "PASS": "run_tests",
-            "CHANGES": "impl_decide",
-            "MALFORMED": "user",
-        },
-        "impl_decide": {
-            "correct": "implement",
-            "overstated": "run_tests",
-            "wrong": "run_tests",
-        },
-        "run_tests": {"pass": "count_lines", "fail": "fail_decide"},
-        "fail_decide": {"code_wrong": "implement", "tests_wrong": "qa_write"},
-        "count_lines": {"ok": "commit", "over": "implement"},
-        "commit": {"done": "commit_reviews", "refused": "commit"},
-        "commit_reviews": {
-            "PASS": "next_unit",
-            "CHANGES": "commit_decide",
-            "MALFORMED": "user",
-        },
-        "commit_decide": {
-            "correct": "write_unit",
-            "overstated": "next_unit",
-            "wrong": "next_unit",
-        },
-        "next_unit": {"more": "write_unit", "last": "full_suite"},
+        "commit_tests": {"done": "implement", "refused": "qa_write"},
+        "implement": {"recorded": "tests_review"},
+        "tests_review": {"PASS": "verify", "CHANGES": "tests_decide", "MALFORMED": "user"},
+        "tests_decide": {"correct": "qa_fix", "overstated": "verify", "wrong": "verify"},
+        "qa_fix": {"recorded": "commit_tests"},
+        "verify": {"fast": "commit_fix", "full": "impl_review", "tests_touched": "implement", "fail": "fail_decide"},
+        "fail_decide": {"code_wrong": "implement", "tests_wrong": "qa_fix"},
+        "impl_review": {"PASS": "commit_fix", "CHANGES": "impl_decide", "MALFORMED": "user"},
+        "impl_decide": {"correct": "implement", "overstated": "commit_fix", "wrong": "commit_fix"},
+        "commit_fix": {"done": "next_unit", "refused": "implement"},
+        "next_unit": {"more": "write_unit", "last": "done", "finished": "done"},
         "full_suite": {"pass": "answers_ask", "fail": "full_decide"},
         "full_decide": {"code_wrong": "write_unit"},
-        "answers_ask": {
-            "PASS": "done",
-            "CHANGES": "aa_decide",
-            "MALFORMED": "user",
-        },
-        "aa_decide": {
-            "correct": "write_unit",
-            "overstated": "done",
-            "wrong": "done",
-        },
+        "answers_ask": {"PASS": "done", "CHANGES": "aa_decide", "MALFORMED": "user"},
+        "aa_decide": {"correct": "write_unit", "overstated": "done", "wrong": "done"},
         "user": {},
         "done": {},
     }
@@ -147,6 +157,7 @@ def test_us7_edges_match_the_unit_loop_table():
 def test_us7_agent_steps_exact():
     assert graph.AGENT_STEPS == {
         "qa_write": ("qa", "write"),
+        "qa_fix": ("qa", "fix"),
         "implement": ("implementer", "code"),
     }
 
@@ -155,7 +166,6 @@ def test_us7_review_passes_exact():
     assert graph.REVIEW_PASSES == {
         "tests_review": ("tests",),
         "impl_review": ("impl",),
-        "commit_reviews": ("commit", "principles", "alternatives"),
         "answers_ask": ("answers-ask",),
     }
 
@@ -164,19 +174,20 @@ def test_us7_decides_on_exact():
     assert graph.DECIDES_ON == {
         "tests_decide": "tests_review",
         "impl_decide": "impl_review",
-        "commit_decide": "commit_reviews",
         "aa_decide": "answers_ask",
     }
 
 
 def test_us7_back_edges_exact_with_targets():
     assert graph.BACK_EDGES == {
-        ("tests_decide", "correct"): "qa_write",
+        ("tests_decide", "correct"): "qa_fix",
         ("red_decide", "tests_wrong"): "qa_write",
         ("impl_decide", "correct"): "implement",
         ("fail_decide", "code_wrong"): "implement",
-        ("fail_decide", "tests_wrong"): "qa_write",
-        ("count_lines", "over"): "implement",
+        ("fail_decide", "tests_wrong"): "qa_fix",
+        ("verify", "tests_touched"): "implement",
+        ("commit_tests", "refused"): "qa_write",
+        ("commit_fix", "refused"): "implement",
     }
 
 
@@ -186,29 +197,12 @@ def test_us7_caps():
 
 
 def test_us7_kind_of_every_node():
-    agent = {"qa_write", "implement"}
-    decide = {
-        "red_decide",
-        "tests_decide",
-        "impl_decide",
-        "fail_decide",
-        "commit_decide",
-        "full_decide",
-        "aa_decide",
-    }
+    agent = {"qa_write", "qa_fix", "implement"}
+    decide = {"red_decide", "tests_decide", "impl_decide", "fail_decide", "full_decide", "aa_decide"}
     auto = {
-        "write_unit",
-        "red_run",
-        "tests_review",
-        "impl_review",
-        "run_tests",
-        "count_lines",
-        "commit",
-        "commit_reviews",
-        "next_unit",
-        "full_suite",
-        "answers_ask",
-    }
+        "write_unit", "red_run", "commit_tests", "tests_review", "verify", "impl_review", "commit_fix",
+        "next_unit", "full_suite", "answers_ask",
+    }  # fmt: skip
     expected = {n: "agent" for n in agent}
     expected.update({n: "decide" for n in decide})
     expected.update({n: "auto" for n in auto})
@@ -216,8 +210,9 @@ def test_us7_kind_of_every_node():
     assert {n: graph.kind(n) for n in EDGES} == expected
 
 
-def test_us7_commit_is_auto():
-    assert graph.kind("commit") == "auto"
+def test_us7_commit_fix_is_auto():
+    assert graph.kind("commit_fix") == "auto"
+    assert graph.kind("qa_fix") == "agent"
 
 
 def test_us7_back_edges_are_real_edges():
@@ -270,8 +265,8 @@ def test_us7_forward_entries_do_not_count():
 
 
 def test_us7_outcome_key_back_edges_count():
-    over = {"node": "count_lines", "outcome": "over", "to": "implement"}
-    assert graph.back_rounds([over, over], "implement") == 2
+    touched = {"node": "verify", "outcome": "tests_touched", "to": "implement"}
+    assert graph.back_rounds([touched, touched], "implement") == 2
 
 
 def test_us7_user_continue_resets_the_count():
@@ -293,39 +288,39 @@ def test_us7_only_last_user_continue_resets():
     assert graph.back_rounds(entries, "implement") == 1
 
 
-def test_us7_count_lines_over_three_times_caps_count_lines():
-    over = {"node": "count_lines", "outcome": "over", "to": "implement"}
-    assert graph.cap_reached([over, over], "count_lines") is False
-    assert graph.cap_reached([over, over, over], "count_lines") is True
+def test_us7_verify_tests_touched_three_times_caps_verify():
+    over = {"node": "verify", "outcome": "tests_touched", "to": "implement"}
+    assert graph.cap_reached([over, over], "verify") is False
+    assert graph.cap_reached([over, over, over], "verify") is True
 
 
 def test_us7_rounds_to_implement_pool_across_nodes():
     entries = [
         _impl_back(),
         _back("fail_decide", "code_wrong", "implement"),
-        {"node": "count_lines", "outcome": "over", "to": "implement"},
+        {"node": "verify", "outcome": "tests_touched", "to": "implement"},
     ]
     assert graph.back_rounds(entries, "implement") == 3
     assert graph.cap_reached(entries, "impl_decide") is True
 
 
 def test_us7_back_edge_to_other_target_does_not_count():
-    to_qa = [_back("tests_decide", "correct", "qa_write")] * 3
+    to_qa = [_back("tests_decide", "correct", "qa_fix")] * 3
     assert graph.back_rounds(to_qa, "implement") == 0
-    assert graph.back_rounds(to_qa, "qa_write") == 3
+    assert graph.back_rounds(to_qa, "qa_fix") == 3
     assert graph.cap_reached(to_qa, "impl_decide") is False
     assert graph.cap_reached(to_qa, "tests_decide") is True
 
 
 def test_us7_cap_reached_false_for_node_without_back_edges():
     entries = [_impl_back()] * 5
-    assert graph.cap_reached(entries, "commit") is False
+    assert graph.cap_reached(entries, "commit_fix") is False
 
 
 def test_us7_cap_reached_any_back_edge_of_node_triggers():
-    entries = [_back("tests_decide", "correct", "qa_write")] * 3
+    entries = [_back("tests_decide", "correct", "qa_fix")] * 3
     assert graph.cap_reached(entries, "fail_decide") is True
-    assert graph.cap_reached(entries, "red_decide") is True
+    assert graph.cap_reached(entries, "red_decide") is False
 
 
 def _review(node="tests_review", outcome="CHANGES"):
@@ -456,7 +451,7 @@ def _wrongs(pass_, n, node="tests_decide"):
 
 
 def _qa_back():
-    return _back("tests_decide", "correct", "qa_write")
+    return _back("tests_decide", "correct", "qa_fix")
 
 
 STOP_LIST = ["escalate", "architecture_stop"]
@@ -499,7 +494,7 @@ def test_us7_options_cap_on_fail_decide_and_impl_decide():
 
 
 def test_us7_options_cap_after_user_continue_is_reset():
-    entries = [_qa_back()] * 3 + [_user_continue("qa_write")]
+    entries = [_qa_back()] * 3 + [_user_continue("qa_fix")]
     assert graph.legal_options("tests_decide", entries, set()) == list(EDGES["tests_decide"])
 
 
@@ -524,34 +519,6 @@ def test_us7_options_impl_decide_two_wrong_removes_wrong():
     assert graph.legal_options("impl_decide", _wrongs("impl", 2, "impl_decide"), set()) == [
         "correct",
         "overstated",
-        "escalate",
-        "architecture_stop",
-    ]
-
-
-def test_us7_options_commit_decide_keeps_wrong_while_alternatives_under_cap():
-    entries = _wrongs("commit", 2, "commit_decide") + _wrongs("principles", 2, "commit_decide")
-    entries += _wrongs("alternatives", 1, "commit_decide")
-    assert graph.legal_options("commit_decide", entries, set()) == list(EDGES["commit_decide"])
-
-
-def test_us7_options_commit_decide_drops_wrong_when_all_passes_at_cap():
-    entries = []
-    for p in ("commit", "principles", "alternatives"):
-        entries += _wrongs(p, 2, "commit_decide")
-    assert graph.legal_options("commit_decide", entries, set()) == [
-        "correct",
-        "overstated",
-        "escalate",
-        "architecture_stop",
-    ]
-
-
-def test_us7_options_commit_decide_no_history_has_wrong():
-    assert graph.legal_options("commit_decide", [], set()) == [
-        "correct",
-        "overstated",
-        "wrong",
         "escalate",
         "architecture_stop",
     ]
@@ -590,8 +557,8 @@ def test_us7_options_agent_nodes_have_none():
     assert graph.legal_options("implement", [], {"f"}) == []
 
 
-def test_us7_options_stalled_commit_offers_escalate_and_architecture_stop():
-    assert graph.legal_options("commit", [], set()) == ["escalate", "architecture_stop"]
+def test_us7_options_stalled_commit_fix_offers_escalate_and_architecture_stop():
+    assert graph.legal_options("commit_fix", [], set()) == ["escalate", "architecture_stop"]
 
 
 def test_us7_options_every_auto_node_gives_the_stops():
@@ -602,7 +569,7 @@ def test_us7_options_every_auto_node_gives_the_stops():
 
 def test_us7_options_returns_a_fresh_list_and_keeps_inputs():
     entries, unc = [_qa_back()] * 3, {"f"}
-    first = graph.legal_options("commit", entries, unc)
+    first = graph.legal_options("commit_fix", entries, unc)
     first.append("x")
-    assert graph.legal_options("commit", entries, unc) == STOP_LIST
+    assert graph.legal_options("commit_fix", entries, unc) == STOP_LIST
     assert entries == [_qa_back()] * 3 and unc == {"f"}
