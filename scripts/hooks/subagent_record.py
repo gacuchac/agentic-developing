@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 WORKSPACE = Path(__file__).resolve().parents[2]
@@ -55,3 +56,28 @@ def _pending_step(event: dict, active: Path) -> tuple[Path, str] | None:
     if pending.get("kind") != "agent" or pending.get("agent") != event.get("agent_type"):
         return None
     return run, pending["step_id"]
+
+
+def main(stdin: str, active: Path, record: Callable[[Path, str, dict], list[str]]) -> int:
+    """Record the result block of a stopping workflow agent; return 2 with the refusal on stderr, else 0.
+
+    `record(run, step_id, result)` returns error lines. Missing or invalid input, no claim,
+    no pending step for this agent, or no valid block records nothing."""
+    try:
+        event = json.loads(stdin)
+        pending = _pending_step(event, active)
+        result = extract_result(event.get("last_assistant_message") or "") or extract_result(
+            event.get("tool_input", {}).get("message") or ""
+        )
+    except Exception:
+        return 0
+    if pending is None or result is None:
+        return 0
+    errors = record(pending[0], pending[1], result)
+    if errors:
+        print("\n".join(errors), file=sys.stderr)
+    return 2 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.stdin.read(), WORKSPACE / ".claude" / "runs" / ".active", real_record))
