@@ -8,14 +8,18 @@ from pathlib import Path
 import schema
 
 SCHEMAS: dict = {
-    "qa": {"tests_added": [str], "red_run": {"failed": [str], "reason_expected": bool}},
+    "qa": {"tests_added": [str], "red_run": {"failed": [str], "reason_expected": bool}, "left_out": [str]},
     "qa_fix": {"tests_changed": [str]},
     "implementer": {"files": {str: int}, "tests_run": {"passed": int, "failed": [str]}, "tests_disputed": [str]},
     "subtract": {"removed": str, "files": {str: int}},
 }
 
 EXAMPLES: dict = {
-    "qa": {"tests_added": ["tests/test_x.py"], "red_run": {"failed": ["test_x"], "reason_expected": True}},
+    "qa": {
+        "tests_added": ["tests/test_x.py"],
+        "red_run": {"failed": ["test_x"], "reason_expected": True},
+        "left_out": ["case: passes today"],
+    },
     "qa_fix": {"tests_changed": ["tests/test_x.py"]},
     "implementer": {"files": {"src/x.py": 12}, "tests_run": {"passed": 3, "failed": []}, "tests_disputed": []},
     "subtract": {"removed": "unused helper", "files": {"src/x.py": 4}},
