@@ -102,11 +102,20 @@ def _verify(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     return ("fail" if stray or hit or disputed else units.unit_lane(unit)), entry, state
 
 
+def _made_already(ctx: Ctx, message: str) -> str | None:
+    """Return HEAD's sha when HEAD is this message's commit, made by a run that died before saving the state."""
+    shown = ctx.source(ctx.repo, "HEAD", None).splitlines()
+    subject = next((line.strip() for line in shown if line.startswith("    ")), "")
+    return shown[0].split()[1] if subject == message.splitlines()[0] else None
+
+
 def _commit(state: dict, ctx: Ctx, message: str, paths: list[str] | None) -> tuple[str, dict, dict]:
     try:
         sha = ctx.commit(ctx.repo, message, paths)
     except RuntimeError as err:
-        return "refused", {"message": message, "error": str(err)}, state
+        sha = _made_already(ctx, message)
+        if sha is None:
+            return "refused", {"message": message, "error": str(err)}, state
     ctx.log(ctx.run, [sha, message])
     return "done", {"sha": sha, "message": message}, {**state, "head": sha}
 
