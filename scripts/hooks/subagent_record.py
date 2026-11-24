@@ -47,21 +47,25 @@ def real_record(run: Path, step_id: str, result: dict) -> list[str]:
 
 
 def _pending_step(event: dict, active: Path) -> tuple[Path, str] | None:
-    """Return (run folder, step id) when the stopping agent is the one the session's pending step waits for."""
-    names = claimfiles.owned_by(active, event.get("session_id"))
-    if not names:
+    """Return (run folder, step id) of the agent's registered entry when that run is pending it for the agent type."""
+    entry = claimfiles.read(active / "agents", f"{event.get('agent_id')}.json")
+    if not entry:
         return None
-    run = Path(claimfiles.read(active, names[0])["run"])
+    run = Path(entry["run"])
     pending = (json.loads((run / "state.json").read_text()).get("pending")) or {}
-    if pending.get("kind") != "agent" or pending.get("agent") != event.get("agent_type"):
+    if (
+        pending.get("kind") != "agent"
+        or pending.get("agent") != event.get("agent_type")
+        or pending.get("step_id") != entry["step_id"]
+    ):
         return None
-    return run, pending["step_id"]
+    return run, entry["step_id"]
 
 
 def main(stdin: str, active: Path, record: Callable[[Path, str, dict], list[str]]) -> int:
     """Record the result block of a stopping workflow agent; return 2 with the refusal on stderr, else 0.
 
-    `record(run, step_id, result)` returns error lines. Missing or invalid input, no claim,
+    `record(run, step_id, result)` returns error lines. Missing or invalid input, no registry entry,
     no pending step for this agent, or no valid block records nothing."""
     try:
         event = json.loads(stdin)
