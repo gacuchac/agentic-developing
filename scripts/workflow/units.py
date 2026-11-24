@@ -53,3 +53,18 @@ def test_commit_message(unit_md: str) -> str:
     """
     stories, body = _stories_and_body(unit_md)
     return f"test({stories}): {body}" if stories else f"test: {body}"
+
+
+def _field(unit_md: str, name: str) -> str | None:
+    found = re.search(rf"^{name}:[ \t]*(.*?)[ \t]*$", unit_md, re.MULTILINE)
+    return found.group(1) if found else None
+
+
+def unit_lane(unit_md: str) -> str:
+    """Return "fast" when the unit has a `Lane: fast` line, else "full" (also for unknown values)."""
+    return "fast" if _field(unit_md, "Lane") == "fast" else "full"
+
+
+def declared_breaks(unit_md: str) -> list[str]:
+    """Return the comma-separated, stripped ids of the unit's `Breaks:` line, or [] without one."""
+    return [i.strip() for i in (_field(unit_md, "Breaks") or "").split(",") if i.strip()]

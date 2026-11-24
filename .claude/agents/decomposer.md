@@ -14,8 +14,11 @@ The stories this task delivers, each with an id (US-1, US-2, ...). Take them fro
 ## Approach
 How you expect to solve the task, in a few sentences.
 ## Subtasks
-1. <title> (story: US-n, lane: fast|full): files touched, function contracts touched (name, inputs, outputs), tests needed.
-   Done when: one checkable line tied to that story.
+### <n>. <title> (US-n)
+Lane: fast|full
+Breaks: <test ids this subtask is allowed to leave failing, if any, inside a plan the user approved>
+Files touched, function contracts touched (name, inputs, outputs), tests needed.
+Done when: one checkable line tied to that story.
 ## Files and functions
 Every file you expect to touch, and in each, every function you'll add or change, as <file>:<function>.
 ## Contracts
@@ -28,7 +31,7 @@ Evals flag: yes or no. Yes if the task changes LLM or agent behaviour (prompts, 
 Every ambiguity you would otherwise have to guess, with the options you see. Don't guess; list it here.
 
 Keep subtasks small enough that each is clearly specified for a Sonnet-class implementer, and can be delivered in commits of at most 30 changed lines of code (tests and docs don't count; a subtask may take several commits).
-Tag each subtask `lane: fast` or `lane: full`. Full: it changes a public contract, a schema or migration, a risky seam (auth, network, an external service, deploy configuration) or security. Everything else is fast.
+Give each subtask a `Lane: fast` or `Lane: full` line. Full: it changes a public contract, a schema or migration, a risky seam (auth, network, an external service, deploy configuration) or security. Everything else is fast.
 
 If the main orchestrator sends you clashes with other plans, you get your plan, the other plans and each clash. Revise your plan so the clashes go away without changing the other tasks, and add a section "## Changes since last round" saying what you changed and why. If a clash can't go away without changing a contract, say so there instead.
 
