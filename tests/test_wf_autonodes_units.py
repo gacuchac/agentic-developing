@@ -132,3 +132,38 @@ def test_us6_write_unit_fix_after_full_decide_holds_failing_tests(tmp_path):
     assert text.splitlines()[0] == units.plan_units(PLAN)[1].splitlines()[0]
     assert "Fix: full-suite tests/t.py::test_a on abc123" in text
     assert text.splitlines()[-1] == "tests/t.py::test_a"
+
+
+def _alternatives_fix_state(tmp_path, findings):
+    line = "L2: FAIL — second option was not weighed"
+    s = _state(tmp_path, unit=2, fix=1)
+    (tmp_path / "review-alternatives-1.md").write_text(f"L1: PASS\n{line}\n")
+    s["history"] = [
+        {
+            "t": "t1",
+            "unit": "2",
+            "node": "branch_reviews",
+            "verdict": "CHANGES",
+            "reviews": [
+                {
+                    "pass": "alternatives",
+                    "review": "review-alternatives-1.md",
+                    "verdict": "CHANGES",
+                    "fails": ["L2"],
+                    "dropped": [],
+                }
+            ],
+        },
+        {"t": "t2", "unit": "2", "node": "branch_decide", "decision": "correct", "evidence": {"findings": findings}},
+    ]
+    return s, line
+
+
+def test_us28_write_unit_fix_reads_finding_records_by_id(tmp_path):
+    s, line = _alternatives_fix_state(tmp_path, [{"id": "L2", "reason": "x"}])
+    out, _, _ = autonodes.HANDLERS["write_unit"](s, _ctx(tmp_path))
+    assert out == "done"
+    text = (tmp_path / "unit.md").read_text()
+    assert "alternatives L2" in text
+    assert line in text
+    assert "L1: PASS" not in text
