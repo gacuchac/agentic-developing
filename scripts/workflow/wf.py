@@ -4,6 +4,8 @@ from collections import Counter
 from pathlib import Path
 
 import agent_steps
+import engine
+import graph
 from autonodes import Ctx
 
 _EVIDENCE = {
@@ -66,3 +68,22 @@ def _launch(state: dict, ctx: Ctx) -> dict:
     )
     error = (state["history"] or [{}])[-1].get("error", "")
     return {"id": "launch", "kind": "agent", "agent": agent, "step_id": step_id, "prompt": prompt + error}
+
+
+def options_view(state: dict, ctx: Ctx) -> list[dict]:
+    """Return the pending step's options.
+
+    An agent step gives one launch with its prompt; a decide or user node gives one entry per legal
+    option (architecture_stop only when it is the sole one); an end gives [].
+    """
+    kind = state["pending"]["kind"]
+    if kind == "agent":
+        return [_launch(state, ctx)]
+    if kind == "end":
+        return []
+    node, legal = state["node"], engine.legal(state, ctx)
+    shown = legal if len(legal) == 1 else [o for o in legal if o != "architecture_stop"]
+    return [
+        {"id": o, "kind": kind, "to": graph.EDGES[node].get(o, graph.STOPS.get(o)), "evidence": _EVIDENCE[o]}
+        for o in shown
+    ]
