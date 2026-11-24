@@ -120,6 +120,7 @@ When every task launched together is merged, review the combined result in two p
 - Merging into `dev` or `uat` may deploy that environment; that's allowed. Nothing reaches production without my approval.
 - If the repo has no GitHub remote (as in the smoke test), merge into `dev` locally with `git merge --no-ff <branch>` instead of a PR, and say so. That's the only exception.
 - `.github/workflows/branch-order.yml` (section 7.26) checks every PR's source branch against the table above. Branch protection (section 9b) makes PRs and my approval on `main` mandatory; I apply it by hand.
+- One session per task, and one worktree per session. A session drives at most one task and touches only that task's run folder, checkout and branch; other tasks are read-only to it. `wf` records the owner in `.claude/runs/.active/<project>--<task-id>.json` and refuses a task another live session holds; the `PreToolUse` guards refuse launches off the graph and edits outside the task, and `pre-commit` refuses a branch another session holds. A stale claim (its process is gone) is taken over and logged; only I free a live one, with `wf release <run> --reason ...`. Each session's worktree is `.worktrees/<project>/<task-id>/`; when other sessions are active, change the workflow from a root worktree, not the root checkout, and keep the root checkout on `dev`.
 
 ## 5. Review passes
 
