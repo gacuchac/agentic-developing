@@ -11,7 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-_FAILURE_LINE = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.M)
+_FAILURE_LINE = re.compile(r"^(?:FAILED|ERROR) (.+?)(?: - .*)?$", re.M)
 
 
 def failed_ids(output: str) -> list[str]:

@@ -80,8 +80,9 @@ def _result(state: dict, node: str) -> dict:
 
 
 def _is_red(test: str, failed: list[str]) -> bool:
-    """True when `test` (an id or a file) failed itself, through its file, or through a test inside it."""
-    return test in failed or test.split("::")[0] in failed or any(f.startswith(test + "::") for f in failed)
+    """True when `test` (an id or a file) failed itself, through its file, or through a case or test inside it."""
+    inside = (test + "::", test + "[")
+    return test in failed or test.split("::")[0] in failed or any(f.startswith(inside) for f in failed)
 
 
 def _red_run(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
