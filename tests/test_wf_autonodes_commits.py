@@ -131,13 +131,16 @@ def test_us10_commit_subtract_message_uses_stories_and_summary(tmp_path):
 def test_us33_commit_subtract_writes_a_subtract_record_without_running_evidence(tmp_path):
     ctx, state, calls = _make(tmp_path)
     state["history"].append({"node": "subtract", "result": {"removed": "dead helper", "files": {}}})
-    state["history"].append({"node": "subtract_check", "outcome": "pass", "result": {"touched": [], "failed": []}})
+    state["history"].append({"node": "subtract_check", "outcome": "fail", "result": {"touched": ["old_test.py"], "failed": ["old"]}})
+    state["history"].append({"node": "subtract_check", "outcome": "pass", "result": {"touched": ["tests/a.py"], "failed": ["tests/b.py::t"]}})
     outcome, entry, _ = autonodes.HANDLERS["commit_subtract"](state, ctx)
     assert outcome == "done"
     ev_path = tmp_path / f"evidence-{SHA}.json"
     record = json.loads(ev_path.read_text())
     assert record["kind"] == "subtract"
     assert record["sha"] == SHA
+    assert record["tests_touched"] == ["tests/a.py"]
+    assert record["suite_failed"] == ["tests/b.py::t"]
     assert calls["evidence"] == []
     assert Path(entry["evidence"]) == ev_path
 
