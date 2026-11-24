@@ -1,11 +1,16 @@
-"""Agent registry entries (pure helpers only).
-
-Turns a subagent launch event into the entry that names the agent's task.
-"""
+"""PostToolUse hook: register a launched workflow agent under `.active/agents/`."""
 
 from __future__ import annotations
 
+import json
 import re
+import sys
+from pathlib import Path
+
+WORKSPACE = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(WORKSPACE / "scripts" / "workflow"))
+
+from effects import claimfiles  # noqa: E402
 
 _STEP = re.compile(r"^wf-step:\s*(\S+)\s*$", re.MULTILINE)
 _RUN = re.compile(r"^Run folder:\s*(.+?)\s*$", re.MULTILINE)
@@ -31,3 +36,21 @@ def entry_from(event: dict) -> tuple[str, dict] | None:
         "agent": tool_input["subagent_type"],
     }
     return f"{agent_id}.json", entry
+
+
+def main(stdin: str, active: Path) -> int:
+    """Write the launch event's entry to `active/agents/<agentId>.json`, keeping an existing one; return 0 always.
+
+    Unreadable input and events without an entry write nothing."""
+    try:
+        event = json.loads(stdin)
+    except ValueError:
+        return 0
+    found = entry_from(event) if isinstance(event, dict) else None
+    if found:
+        claimfiles.create(active / "agents", *found)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.stdin.read(), WORKSPACE / ".claude" / "runs" / ".active"))
