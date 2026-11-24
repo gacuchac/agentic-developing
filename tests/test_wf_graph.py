@@ -614,3 +614,24 @@ def test_us7_options_returns_a_fresh_list_and_keeps_inputs():
     first.append("x")
     assert graph.legal_options("commit_fix", entries, unc) == STOP_LIST
     assert entries == [_qa_back()] * 3 and unc == {"f"}
+
+
+def test_us9_wrong_dismissals_counts_dict_findings_like_bare_ids():
+    entry = {
+        "decision": "wrong",
+        "evidence": {"findings": [{"id": "T1", "reason": "r"}, {"id": "T2", "reason": "r"}]},
+        "passes": {"T1": "tests", "T2": "tests"},
+    }
+    assert graph.wrong_dismissals([entry]) == {"tests": 2}
+
+
+def test_us9_undismissed_accepts_dict_findings_like_bare_ids():
+    entries = [
+        {
+            "node": "tests_decide",
+            "decision": "overstated",
+            "evidence": {"findings": [{"id": "T1", "reason": "r"}]},
+            "passes": {"T1": "tests"},
+        },
+    ]
+    assert graph.undismissed(entries, "tests_decide", ["T1", "T2"]) == ["T2"]

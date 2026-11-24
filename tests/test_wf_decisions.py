@@ -66,3 +66,16 @@ def test_us11_header_written_once_when_empty():
     assert second.startswith(first)
     assert second.count(HEADER) == 1
     assert second.splitlines()[-1].split("\t") == ["7", "8", "9", "10", "11", "12"]
+
+
+def test_us9_correct_entry_with_bare_id_findings_shows_the_id_as_evidence():
+    entry = {
+        "unit": "3",
+        "node": "tests_decide",
+        "decision": "correct",
+        "evidence": {"findings": ["T1"]},
+        "to": "qa_fix",
+        "t": "2026-11-23T10:00:00",
+    }
+    cells = decisions.row(entry)
+    assert "T1" in cells[4]

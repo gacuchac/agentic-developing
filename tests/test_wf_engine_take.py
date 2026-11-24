@@ -118,8 +118,9 @@ def test_us9_dismissing_every_fail_is_needed_before_the_task_moves_on(tmp_path):
     s, errors = engine.take(s, "overstated", ev2, ctx, h)
     assert errors == []
     assert s["node"] == "fail_decide"
-    assert s["history"][-1]["to"] == "verify"
-    assert s["history"][-1]["passes"] == {"T2": "tests"}
+    decided = [e for e in s["history"] if e.get("decision")]
+    assert decided[-1]["to"] == "verify"
+    assert decided[-1]["passes"] == {"T2": "tests"}
     assert len(logged) == 2
 
 
