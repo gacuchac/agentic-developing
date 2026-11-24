@@ -230,7 +230,7 @@ def test_us10_prompt_first_line_follows_step_id():
     assert b == "wf-step: u4-impl-2" and a != b
 
 
-@pytest.mark.parametrize("agent,step", [("qa", "write"), ("implementer", "green")])
+@pytest.mark.parametrize("agent,step", [("qa", "write"), ("qa", "fix"), ("implementer", "code"), ("implementer", "subtract")])
 def test_us10_prompt_has_agent_step_run_repo_and_unit(agent, step):
     out = render(agent, step)
     assert agent in out and step in out
@@ -238,14 +238,14 @@ def test_us10_prompt_has_agent_step_run_repo_and_unit(agent, step):
     assert UNIT in out
 
 
-@pytest.mark.parametrize("agent,example", [("qa", QA), ("implementer", IMPL)])
-def test_us10_prompt_result_block_matches_schema(agent, example):
-    data = result_block(render(agent, "x"))
+@pytest.mark.parametrize("agent,step,example", [("qa", "write", QA), ("implementer", "code", IMPL)])
+def test_us10_prompt_result_block_matches_schema(agent, step, example):
+    data = result_block(render(agent, step))
     assert validate_result(agent, data) == []
 
 
 def test_us10_prompt_result_block_differs_per_agent():
-    assert result_block(render("qa")) != result_block(render("implementer"))
+    assert result_block(render("qa", "write")) != result_block(render("implementer", "code"))
 
 
 @pytest.mark.parametrize("agent", ["qa", "implementer"])
@@ -266,7 +266,7 @@ def test_us10_template_replaces_default():
 def test_us10_template_fills_schema():
     out = render("qa", template="{schema}")
     assert out.strip() and "{schema}" not in out and "tests_added" in out
-    out = render("implementer", template="{schema}")
+    out = render("implementer", "code", template="{schema}")
     assert "tests_run" in out
 
 
