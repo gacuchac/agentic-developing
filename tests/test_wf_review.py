@@ -237,3 +237,78 @@ def test_us8_saved_path_takes_the_last_saved_line():
 
 def test_us8_saved_path_empty_is_none():
     assert review.saved_path("") is None
+
+
+US8_SOURCE = "def f(a, b):\n    return a + b\n"
+US8_IDS = ["C1", "C2", "C3"]
+
+
+def _us8_review(c2: str) -> str:
+    return f"C1: PASS — Fine.\n{c2}\nC3: N/A — Not relevant.\n"
+
+
+def test_us8_fail_with_quote_in_source_is_kept() -> None:
+    text = _us8_review("C2: FAIL — The diff does X. Exact line: `def f(a, b):`")
+    assert review.dropped_fails(text, US8_SOURCE) == []
+
+
+def test_us8_fail_quote_matches_whitespace_normalised() -> None:
+    text = _us8_review("C2: FAIL — The diff does X. Exact line: `def  f(a,\n b):`")
+    assert review.dropped_fails(text, US8_SOURCE) == []
+
+
+def test_us8_fail_with_quote_not_in_source_is_dropped() -> None:
+    text = _us8_review("C2: FAIL — The diff does X. Exact line: `def g(z):`")
+    assert review.dropped_fails(text, US8_SOURCE) == ["C2"]
+
+
+def test_us8_fail_without_backticks_is_dropped() -> None:
+    text = _us8_review("C2: FAIL — The diff does X and it is wrong.")
+    assert review.dropped_fails(text, US8_SOURCE) == ["C2"]
+
+
+def test_us8_quote_on_continuation_line_counts() -> None:
+    text = _us8_review("C2: FAIL — The diff does X.\n  Exact line: `def f(a, b):`")
+    assert review.dropped_fails(text, US8_SOURCE) == []
+
+
+def test_us8_quote_in_next_criterion_does_not_count() -> None:
+    text = "C1: FAIL — No quote here.\nC2: PASS — See `def f(a, b):`.\n"
+    assert review.dropped_fails(text, US8_SOURCE) == ["C1"]
+
+
+def test_us8_dropped_fails_lists_only_fails_in_order() -> None:
+    text = ("C1: FAIL — no quote\nC2: PASS — nothing\nC3: FAIL — `missing line`\n"
+            "C4: N/A — nothing\nC5: FAIL — `def f(a, b):`\n")
+    assert review.dropped_fails(text, US8_SOURCE) == ["C1", "C3"]
+
+
+def test_us8_pass_and_na_never_dropped() -> None:
+    text = "C1: PASS — no quote\nC2: N/A — no quote\n"
+    assert review.dropped_fails(text, US8_SOURCE) == []
+
+
+def test_us8_derive_verdict_unquoted_fail_gives_pass() -> None:
+    text = _us8_review("C2: FAIL — The diff does X, no quote.")
+    assert review.derive_verdict(text, US8_IDS, US8_SOURCE) == ("PASS", [])
+
+
+def test_us8_derive_verdict_quoted_fail_gives_changes() -> None:
+    text = _us8_review("C2: FAIL — The diff does X. Exact line: `def f(a, b):`")
+    assert review.derive_verdict(text, US8_IDS, US8_SOURCE) == ("CHANGES", ["C2"])
+
+
+def test_us8_derive_verdict_keeps_only_quoted_fails() -> None:
+    text = "C1: FAIL — no quote\nC2: FAIL — `def f(a, b):`\nC3: FAIL — `nope`\n"
+    assert review.derive_verdict(text, US8_IDS, US8_SOURCE) == ("CHANGES", ["C2"])
+
+
+def test_us8_derive_verdict_without_source_keeps_unquoted_fail() -> None:
+    text = _us8_review("C2: FAIL — The diff does X, no quote.")
+    assert review.derive_verdict(text, US8_IDS) == ("CHANGES", ["C2"])
+    assert review.derive_verdict(text, US8_IDS, None) == ("CHANGES", ["C2"])
+
+
+def test_us8_derive_verdict_source_still_malformed_when_id_missing() -> None:
+    text = "C1: PASS — ok\n"
+    assert review.derive_verdict(text, US8_IDS, US8_SOURCE) == ("MALFORMED", [])
