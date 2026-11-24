@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -64,4 +65,23 @@ def _next_unit(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     return "last", {}, state
 
 
-HANDLERS: dict[str, Handler] = {"write_unit": _write_unit, "next_unit": _next_unit}
+def _result(state: dict, node: str) -> dict:
+    return [e for e in state["history"] if e.get("node") == node and "result" in e][-1]["result"]
+
+
+def _red_run(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
+    """Run qa's added tests; `expected` when all fail and qa's reason is expected, else `unexpected`."""
+    qa = _result(state, "qa_write")
+    added = qa["tests_added"]
+    failed = ctx.tests(ctx.repo, added)["failed"]
+    red = {"tests": added, "failed": failed, "claimed": qa["red_run"]}
+    (ctx.run / "red.json").write_text(json.dumps(red))
+    covered = bool(added) and all(t in failed or t.split("::")[0] in failed for t in added)
+    return ("expected" if covered and qa["red_run"]["reason_expected"] else "unexpected"), red, state
+
+
+HANDLERS: dict[str, Handler] = {
+    "write_unit": _write_unit,
+    "next_unit": _next_unit,
+    "red_run": _red_run,
+}
