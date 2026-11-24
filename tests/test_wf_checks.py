@@ -1,4 +1,5 @@
 """Tests for effects.checks: run pytest and read failing ids."""
+import subprocess
 import sys
 from pathlib import Path
 
@@ -136,3 +137,48 @@ def test_us18_fix_imports_without_ruff_returns_and_leaves_file_unchanged(tmp_pat
     monkeypatch.setenv("PATH", str(empty_bin))
     checks.fix_imports(tmp_path, ["tests/test_a.py"])
     assert test_file.read_text() == text
+
+
+def _size_repo(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("".join(f"line{i}\n" for i in range(10)))
+    (tmp_path / "gone.py").write_text("".join(f"g{i}\n" for i in range(40)))
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    return tmp_path
+
+
+def _lines(n):
+    return "".join(f"x{i}\n" for i in range(n))
+
+
+def test_us24_change_size_counts_untracked_and_edited_code_files(tmp_path):
+    repo = _size_repo(tmp_path)
+    (repo / "big.py").write_text(_lines(31))
+    (repo / "src" / "a.py").write_text("".join(f"new{i}\n" for i in range(5)) + "".join(f"line{i}\n" for i in range(5, 10)))
+    assert checks.change_size(repo) == {"big.py": 31, "src/a.py": 5}
+
+
+def test_us24_change_size_leaves_out_tests_docs_skills_and_deleted_files(tmp_path):
+    repo = _size_repo(tmp_path)
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_big.py").write_text(_lines(60))
+    (repo / "notes.md").write_text(_lines(60))
+    (repo / ".claude" / "skills" / "s").mkdir(parents=True)
+    (repo / ".claude" / "skills" / "s" / "tool.py").write_text(_lines(60))
+    (repo / "gone.py").unlink()
+    (repo / "kept.py").write_text(_lines(3))
+    assert checks.change_size(repo) == {"kept.py": 3}
+
+
+def test_us24_change_size_stages_nothing(tmp_path):
+    repo = _size_repo(tmp_path)
+    (repo / "big.py").write_text(_lines(31))
+    (repo / "src" / "a.py").write_text("changed\n")
+    before = subprocess.run(["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True, check=True).stdout
+    assert checks.change_size(repo) == {"big.py": 31, "src/a.py": 10}
+    staged = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=repo, capture_output=True, text=True, check=True)
+    assert staged.stdout == ""
+    after = subprocess.run(["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True, check=True).stdout
+    assert after == before
