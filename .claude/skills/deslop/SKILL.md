@@ -15,7 +15,7 @@ Remove, without changing behaviour:
 - Layers that only forward: one-caller wrappers, adapters with one implementation, pass-through functions. Inline them.
 - Duplicated logic: put the decision in one place and call it.
 - Dead code, unused parameters, speculative options nothing uses.
-- Crammed lines (semicolons, long one-liners) written to fit a line cap: split the commit instead.
+- Crammed lines (semicolons, long one-liners): give each statement its own line.
 
 Rules:
 - Behaviour stays the same: the full suite passes before and after, and no test changes.
