@@ -144,3 +144,11 @@ def test_us11_default_ctx_fields_are_callable_or_paths_and_repo_matches(tmp_path
         assert callable(v) or isinstance(v, Path), name
     assert ctx.repo == wf.repo_for(run) == ws / "proj"
     assert ctx.run == run
+
+
+def test_us11_default_ctx_collect_review_takes_only_the_handle(tmp_path):
+    ws, run = _tree(tmp_path, "proj")
+    log = tmp_path / "pass.log"
+    log.write_text("saved: /tmp/review-x.md\n")
+    handle = {"pid": 2**22 + 12345, "log": str(log)}
+    assert wf.default_ctx(run).collect_review(handle) == Path("/tmp/review-x.md")
