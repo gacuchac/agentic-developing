@@ -1,10 +1,11 @@
 ---
 description: Build a planned product or large feature from its PRD, with just-in-time decomposition
-argument-hint: <project>/<planner task-id>
+argument-hint: <project>/<plan-id>
 disable-model-invocation: true
 ---
 
-PRD: .claude/runs/$0/planner/06-prd.md
+My input, `<project>/<plan-id>`: $0
+PRD: ~/Developing/<project>/docs/planning/<plan-id>/06-prd.md, in the project's own repo.
 Build board: .claude/runs/$0/build-board.md
 
 Start or resume:

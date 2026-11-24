@@ -8,7 +8,7 @@ This folder is the development workspace and its own git repo (`gacuchac/agentic
 - `.githooks/`: git hooks for every repo under this folder, enabled once by the global git config (README).
 - `templates/project/`: what a new project starts from (CLAUDE.md, .gitignore, CI). Copied once by `scripts/new_project.py`, never synced.
 - `tests/`: tests of the workflow scripts. `docs/`: reference docs.
-- `.claude/runs/<project>/<task-id>/`: per-task working files (git-ignored). `.worktrees/<project>/<task-id>/`: Parallel-mode worktrees (git-ignored).
+- `.claude/runs/<project>/<task-id>/`: per-task working files (git-ignored). A project's plans (`/planner`) live in its own repo under `docs/planning/<plan-id>/`. `.worktrees/<project>/<task-id>/`: Parallel-mode worktrees (git-ignored).
 - Agents a project ships as part of its product (for example a chatbot's agent) are project code in the project's own folders, not `.claude/` agents.
 
 ## Coding principles (all projects)
