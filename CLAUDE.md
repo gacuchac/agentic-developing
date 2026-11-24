@@ -35,7 +35,7 @@ A rule that matters is enforced by a check; prose is for judgement calls. When t
 | Pure workflow modules (`scripts/workflow/`) do no I/O | `slop_checks.py` SLOP003 |
 | At most 30 changed lines of code per commit | `pre-commit` (`commit_cap.py`) |
 | A commit subject names its story or subtask | `commit-msg` (`commit_msg.py`) |
-| A commit is reviewed before the next one is made | `pre-commit` (`review_gate.py`) |
+| A commit is proven before the next one is made: a `tests` or `commit` review, or a complete evidence record | `pre-commit` (`review_gate.py`, `evidence_record.py`) |
 | Contracts stay stable unless an approved `architecture.md` covers the change | `principles` review P3 (judgement) |
 
 ## How work is routed

@@ -2,8 +2,11 @@
 
 No new commit on a task branch until the previous one has a saved review.
 """
+
 from __future__ import annotations
 
+import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -15,7 +18,7 @@ def task_id(branch: str) -> str | None:
     """Return the part of `branch` after feature/, bugfix/ or hotfix/, else None."""
     for prefix in ("feature/", "bugfix/", "hotfix/"):
         if branch.startswith(prefix):
-            return branch[len(prefix):]
+            return branch[len(prefix) :]
     return None
 
 
@@ -35,12 +38,26 @@ def run_folder(common_dir: Path, task: str, workspace: Path) -> Path | None:
 
 
 def reviewed(folder: Path, sha: str) -> bool:
-    """Return True when any folder/review-commit-*.md names `sha` as its base and records `exit: 0`.
+    """Return True when `folder` holds a saved review or evidence record for `sha`.
 
-    Any verdict counts, a failed Codex run (other exit code) does not; a missing folder gives False.
+    A review-commit-*.md or review-tests-*.md counts when it names `sha` as its base and records `exit: 0`;
+    an evidence-<sha>*.json counts when evidence_record.complete accepts it. A missing folder gives False.
     """
     needles = (f"base: commit {sha} ", "exit: 0 ")
-    return any(all(n in f.read_text() for n in needles) for f in folder.glob("review-commit-*.md"))
+    saved = [*folder.glob("review-commit-*.md"), *folder.glob("review-tests-*.md")]
+    return any(all(n in f.read_text() for n in needles) for f in saved) or any(
+        _complete_record(f) for f in folder.glob(f"evidence-{sha}*.json")
+    )
+
+
+def _complete_record(path: Path) -> bool:
+    spec = importlib.util.spec_from_file_location("evidence_record", Path(__file__).with_name("evidence_record.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.complete(json.loads(path.read_text()))
+    except json.JSONDecodeError:
+        return False
 
 
 def nothing_to_review(repo: Path) -> bool:
@@ -81,8 +98,10 @@ def main(workspace: Path = WORKSPACE) -> int:
     if folder is None or any(reviewed(folder, sha) for sha in (_git("rev-parse", "HEAD"), short)):
         return 0
     print(
-        f"Commit blocked: HEAD {short} on {branch} has no saved commit review in {folder}. "
-        f"Review it first: python3 ~/Developing/scripts/codex_review.py commit --commit {short} ...",
+        f"Commit blocked: HEAD {short} on {branch} has no saved review in {folder}. "
+        f"Unblock it with a saved commit review "
+        f"(python3 ~/Developing/scripts/codex_review.py commit --commit {short} ...), a saved tests review, "
+        "or an evidence record (python3 scripts/hooks/evidence_record.py write --run <run folder>).",
         file=sys.stderr,
     )
     return 1
