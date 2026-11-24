@@ -133,16 +133,25 @@ def test_us33_commit_subtract_writes_a_subtract_record_without_running_evidence(
     state["history"].append({"node": "subtract", "result": {"removed": "dead helper", "files": {}}})
     state["history"].append({"node": "subtract_check", "outcome": "fail", "result": {"touched": ["old_test.py"], "failed": ["old"]}})
     state["history"].append({"node": "subtract_check", "outcome": "pass", "result": {"touched": ["tests/a.py"], "failed": ["tests/b.py::t"]}})
+    seen = []
+
+    def fake(sha, touched, failed):
+        seen.append((sha, touched, failed))
+        return {"kind": "subtract", "sha": sha, "from": "ctx"}
+
+    ctx = dataclasses.replace(ctx, subtract_record=fake)
     outcome, entry, _ = autonodes.HANDLERS["commit_subtract"](state, ctx)
     assert outcome == "done"
     ev_path = tmp_path / f"evidence-{SHA}.json"
-    record = json.loads(ev_path.read_text())
-    assert record["kind"] == "subtract"
-    assert record["sha"] == SHA
-    assert record["tests_touched"] == ["tests/a.py"]
-    assert record["suite_failed"] == ["tests/b.py::t"]
+    assert seen == [(SHA, ["tests/a.py"], ["tests/b.py::t"])]
+    assert json.loads(ev_path.read_text()) == {"kind": "subtract", "sha": SHA, "from": "ctx"}
     assert calls["evidence"] == []
     assert Path(entry["evidence"]) == ev_path
+
+
+def test_us38_ctx_subtract_record_defaults_to_an_empty_record(tmp_path):
+    ctx, _, _ = _make(tmp_path)
+    assert ctx.subtract_record("abc", ["t.py"], []) == {}
 
 
 @pytest.mark.parametrize("node", ["commit_tests", "commit_fix", "commit_subtract"])
@@ -244,6 +253,7 @@ def test_us18_commit_subtract_ignores_earlier_tests_commit(tmp_path):
     state = _with_tests_commit(state, "t111111")
     state["history"].append({"node": "subtract", "result": {"removed": "x", "files": {}}})
     state["history"].append({"node": "subtract_check", "outcome": "pass", "result": {"touched": [], "failed": []}})
+    ctx = dataclasses.replace(ctx, subtract_record=lambda sha, _t, _f: {"kind": "subtract", "sha": sha})
     autonodes.HANDLERS["commit_subtract"](state, ctx)
     assert calls["evidence"] == []
     assert json.loads((tmp_path / f"evidence-{SHA}.json").read_text())["kind"] == "subtract"

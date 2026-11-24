@@ -200,6 +200,7 @@ def default_ctx(run: Path, checkout: Path | None = None) -> Ctx:
         diff=gitops.worktree_diff,
         file_at=gitops.file_at,
         log_text=gitops.log_text,
+        subtract_record=checks.subtract_record,
         log=_logger(run),
         now=lambda: time.strftime("%Y-%m-%dT%H:%M:%S"),
     )

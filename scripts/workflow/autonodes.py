@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -41,6 +40,7 @@ class Ctx:
     size: Callable[[Path], dict[str, int]] = lambda _repo: {}
     added: Callable[[Path], list[str]] = lambda _repo: []
     log_text: Callable[[Path, str], str] = lambda _repo, _base: ""
+    subtract_record: Callable[[str, list[str], list[str]], dict] = lambda _sha, _touched, _failed: {}
 
 
 Handler = Callable[[dict, Ctx], tuple[str, dict, dict]]
@@ -193,15 +193,6 @@ def _full_suite(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     return ("fail" if result["failed"] else "pass"), {"failed": result["failed"], "passed": result["passed"]}, state
 
 
-def _subtract_record(sha: str, touched: list[str], failed: list[str]) -> dict:
-    """Return `evidence_record.subtract_record(sha, touched, failed)`, loaded from the hooks folder."""
-    path = Path(__file__).resolve().parents[1] / "hooks" / "evidence_record.py"
-    spec = importlib.util.spec_from_file_location("evidence_record", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.subtract_record(sha, touched, failed)
-
-
 def _commit_subtract(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     """Commit all as `<stories>: Subtract: <summary>` and write its subtract record; `refused` if a hook fails."""
     stories = units.commit_message((ctx.run / "unit.md").read_text()).split(": ", 1)[0]
@@ -209,7 +200,7 @@ def _commit_subtract(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     outcome, entry, new = _commit(state, ctx, "commit_subtract", message, None)
     if outcome == "done":
         check = _result(state, "subtract_check")
-        record = _subtract_record(entry["sha"], check["touched"], check["failed"])
+        record = ctx.subtract_record(entry["sha"], check["touched"], check["failed"])
         path = ctx.run / f"evidence-{entry['sha']}.json"
         path.write_text(json.dumps(record))
         entry = {**entry, "evidence": str(path)}

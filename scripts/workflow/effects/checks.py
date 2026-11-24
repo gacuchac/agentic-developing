@@ -101,6 +101,11 @@ def added_tests(repo: Path) -> list[str]:
     return _hook("evidence_record").added_tests(diff)
 
 
+def subtract_record(sha: str, touched: list[str], failed: list[str]) -> dict:
+    """Return the evidence record of clean-up commit `sha`, built by `scripts/hooks/evidence_record.py`."""
+    return _hook("evidence_record").subtract_record(sha, touched, failed)
+
+
 def change_size(repo: Path) -> dict[str, int]:
     """Return the changed lines per file of repo's uncommitted changes against HEAD, untracked files included.
 
