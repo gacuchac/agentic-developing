@@ -152,6 +152,21 @@ def _commit_fix(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     return _commit_all(state, ctx, units.commit_message((ctx.run / "unit.md").read_text()))
 
 
+def _subtract_check(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
+    """Give `nothing` without edits, `fail` when tests were touched or the suite fails, else `pass`."""
+    if not ctx.diff(ctx.repo).strip():
+        return "nothing", {}, state
+    touched = ctx.touched(ctx.repo)
+    failed = [] if touched else ctx.tests(ctx.repo, [])["failed"]
+    return ("fail" if touched or failed else "pass"), {"touched": touched, "failed": failed}, state
+
+
+def _full_suite(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
+    """Run the whole suite, accepting no declared breaks: `pass` when nothing fails, else `fail`."""
+    failed = ctx.tests(ctx.repo, [])["failed"]
+    return ("fail" if failed else "pass"), {"failed": failed}, state
+
+
 def _commit_subtract(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     """Commit everything as `<stories>: Subtract: <summary>` and record evidence; `refused` if a hook fails."""
     stories = units.commit_message((ctx.run / "unit.md").read_text()).split(": ", 1)[0]
@@ -201,6 +216,8 @@ HANDLERS: dict[str, Handler] = {
     "commit_tests": _commit_tests,
     "commit_fix": _commit_fix,
     "commit_subtract": _commit_subtract,
+    "subtract_check": _subtract_check,
+    "full_suite": _full_suite,
     "tests_review": _review,
     "impl_review": _review,
     "branch_reviews": _review,
