@@ -110,3 +110,24 @@ def test_us7_uncovered_word_approved_outside_status_line_is_not_approval():
 
 def test_us7_uncovered_uppercase_status_approved_with_named_function_gives_empty():
     assert contracts.uncovered({"f"}, "status: APPROVED\nf") == set()
+
+
+def test_us7_async_def_signature_change_gives_name():
+    d = "--- a/src/x.py\n+++ b/src/x.py\n@@ -1 +1 @@\n-async def f(a):\n+async def f(a, b):\n"
+    assert contracts.changed_signatures(d) == {"f"}
+
+
+def test_us7_multiline_signature_param_changed_gives_name():
+    d = (
+        "--- a/src/x.py\n+++ b/src/x.py\n@@ -1,4 +1,4 @@\n"
+        " def f(\n-    a: int,\n+    a: str,\n ):\n     pass\n"
+    )
+    assert contracts.changed_signatures(d) == {"f"}
+
+
+def test_us7_multiline_signature_param_added_gives_name():
+    d = (
+        "--- a/src/x.py\n+++ b/src/x.py\n@@ -1,3 +1,4 @@\n"
+        " def f(\n     a: int,\n+    b: int,\n ):\n     pass\n"
+    )
+    assert contracts.changed_signatures(d) == {"f"}
