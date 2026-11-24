@@ -30,8 +30,8 @@ def _make(tmp_path, touched=("tests/test_x.py",), commit_raises=False, head=OTHE
         calls["start_review"].append((args, repo, log))
         return {"pid": 42, "log": str(log)}
 
-    def evidence(repo, run, sha, python):
-        calls["evidence"].append((repo, run, sha, python))
+    def evidence(repo, run, sha, python, tests_commit):
+        calls["evidence"].append((repo, run, sha, python, tests_commit))
         return {"sha": sha, "ok": True}
 
     def unused(*a, **k):
@@ -58,6 +58,11 @@ def _make(tmp_path, touched=("tests/test_x.py",), commit_raises=False, head=OTHE
     state = st.new_state("t", "feature/x", "launchsha")
     state["head"] = "oldhead"
     return ctx, state, calls
+
+
+def _with_tests_commit(state, sha, now="2026-01-01T00:00:00"):
+    entry = {"node": "commit_tests", "outcome": "done", "sha": sha}
+    return st.with_entry(state, entry, now)
 
 
 def test_us10_commit_tests_commits_only_touched_paths(tmp_path):
@@ -92,13 +97,14 @@ def test_us10_commit_tests_without_test_paths_is_refused(tmp_path):
 
 def test_us10_commit_fix_commits_everything_and_writes_evidence(tmp_path):
     ctx, state, calls = _make(tmp_path)
+    state = _with_tests_commit(state, "t111111")
     outcome, entry, new = autonodes.HANDLERS["commit_fix"](state, ctx)
     assert outcome == "done"
     _, message, paths = calls["commit"][0]
     assert message == "US-9: Do the thing"
     assert paths is None
     assert new["head"] == SHA
-    assert calls["evidence"] == [(ctx.repo, tmp_path, SHA, ctx.python)]
+    assert calls["evidence"] == [(ctx.repo, tmp_path, SHA, ctx.python, "t111111")]
     ev_path = tmp_path / f"evidence-{SHA}.json"
     assert json.loads(ev_path.read_text()) == {"sha": SHA, "ok": True}
     assert entry["sha"] == SHA
@@ -146,17 +152,19 @@ def test_us10_commit_tests_review_args_name_the_new_commit(tmp_path):
 def test_us10_commit_fix_resumes_a_commit_a_dead_run_already_made(tmp_path):
     head = "commit deadbeef\nAuthor: t <t@t>\n\n    US-9: Do the thing\n\ndiff --git a/x b/x\n"
     ctx, state, calls = _make(tmp_path, commit_raises=True, head=head)
+    state = _with_tests_commit(state, "t111111")
     outcome, entry, new = autonodes.HANDLERS["commit_fix"](state, ctx)
     assert outcome == "done"
     assert entry["sha"] == "deadbeef"
     assert new["head"] == "deadbeef"
-    assert calls["evidence"] == [(ctx.repo, tmp_path, "deadbeef", ctx.python)]
+    assert calls["evidence"] == [(ctx.repo, tmp_path, "deadbeef", ctx.python, "t111111")]
     assert (tmp_path / "evidence-deadbeef.json").exists()
     assert len(calls["log"]) == 1
 
 
 def test_us10_commit_fix_resumes_on_a_real_repo_whose_head_is_the_unit_commit(tmp_path):
     ctx, state, calls = _make(tmp_path)
+    state = _with_tests_commit(state, "t111111")
     repo = tmp_path / "repo"
     repo.mkdir()
     git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "core.hooksPath=/dev/null"]
@@ -170,7 +178,7 @@ def test_us10_commit_fix_resumes_on_a_real_repo_whose_head_is_the_unit_commit(tm
     outcome, entry, new = autonodes.HANDLERS["commit_fix"](state, ctx)
     assert outcome == "done"
     assert new["head"] == sha
-    assert calls["evidence"] == [(repo, tmp_path, sha, ctx.python)]
+    assert calls["evidence"] == [(repo, tmp_path, sha, ctx.python, "t111111")]
 
 
 UNIT_HEAD = "commit deadbeef\nAuthor: t <t@t>\n\n    US-9: Do the thing\n"
@@ -193,3 +201,29 @@ def test_us10_commit_fix_does_not_resume_a_commit_the_state_already_holds(tmp_pa
     assert "sha" not in entry
     assert new["head"] == "deadbeef"
     assert calls["evidence"] == []
+
+
+def test_us18_commit_fix_passes_the_first_done_tests_commit_of_the_unit(tmp_path):
+    ctx, state, calls = _make(tmp_path)
+    state = _with_tests_commit(state, "first11")
+    state = st.with_entry(state, {"node": "commit_tests", "outcome": "refused", "error": "x"}, "t")
+    state = _with_tests_commit(state, "second2")
+    autonodes.HANDLERS["commit_fix"](state, ctx)
+    assert calls["evidence"] == [(ctx.repo, tmp_path, SHA, ctx.python, "first11")]
+
+
+def test_us18_commit_fix_ignores_tests_commits_of_other_units(tmp_path):
+    ctx, state, calls = _make(tmp_path)
+    state = _with_tests_commit(state, "other11")
+    state = {**state, "unit": state["unit"] + 1}
+    state = _with_tests_commit(state, "mine222")
+    autonodes.HANDLERS["commit_fix"](state, ctx)
+    assert calls["evidence"][0][4] == "mine222"
+
+
+def test_us18_commit_subtract_passes_no_tests_commit(tmp_path):
+    ctx, state, calls = _make(tmp_path)
+    state = _with_tests_commit(state, "t111111")
+    state["history"].append({"node": "subtract", "result": {"removed": "x", "files": {}}})
+    autonodes.HANDLERS["commit_subtract"](state, ctx)
+    assert calls["evidence"] == [(ctx.repo, tmp_path, SHA, ctx.python, None)]
