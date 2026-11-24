@@ -101,3 +101,20 @@ def test_us11_report_ratchet_candidates_only_ids_dismissed_twice():
     rat = _section(wf.report_text(log), "Ratchet candidates")
     assert "T2" in rat
     assert "T9" not in rat
+
+
+def _review_entry(dropped):
+    review = {"pass": "alternatives", "review": "/runs/t/review-alternatives-1.md", "verdict": "PASS",
+              "fails": [], "dropped": dropped}
+    return {"node": "branch_reviews", "outcome": "PASS", "to": "full_suite", "t": "t", "unit": "3",
+            "verdict": "PASS", "reviews": [review]}
+
+
+def test_us18_dropped_text_names_pass_ids_and_review_file():
+    state = {**_state(), "history": [_review_entry(["L1"])]}
+    assert wf.dropped_text(state) == "dropped: alternatives L1 (review-alternatives-1.md)"
+
+
+def test_us18_dropped_text_is_empty_when_nothing_dropped():
+    state = {**_state(), "history": [_review_entry([])]}
+    assert wf.dropped_text(state) == ""

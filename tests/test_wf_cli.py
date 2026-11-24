@@ -140,3 +140,17 @@ def test_us11_report_prints_headings(env):
         assert heading in r.stdout
     dis = r.stdout.split("## Dismissals")[1].split("## ")[0]
     assert "quoteXYZ = 1" in dis
+
+
+def test_us18_report_lists_dropped_findings(env):
+    run = _started(env)
+    state = json.loads((run / "state.json").read_text())
+    review = {"pass": "alternatives", "review": "/x/review-alternatives-1.md", "verdict": "PASS",
+              "fails": [], "dropped": ["L1"]}
+    state["history"].append({"node": "branch_reviews", "outcome": "PASS", "to": "full_suite",
+                             "unit": "1", "reviews": [review]})
+    (run / "state.json").write_text(json.dumps(state))
+    r = wf("report", run)
+    assert r.returncode == 0, r.stderr
+    assert "## Dropped findings" in r.stdout
+    assert "dropped: alternatives L1 (review-alternatives-1.md)" in r.stdout
