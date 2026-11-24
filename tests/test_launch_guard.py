@@ -93,7 +93,8 @@ def test_us14_main_denies_off_graph_launch_with_exit_2(tmp_path, capsys):
 
 def test_us14_main_allows_on_graph_launch(tmp_path):
     active = _setup(tmp_path)
-    assert guard.main(json.dumps(_agent("qa", "u3-write-1")), active) == 0
+    prompt = _prompt("u3-write-1", run=str(tmp_path / "run"))
+    assert guard.main(_launch("qa", prompt), active) == 0
 
 
 def test_us14_main_ignores_other_sessions_claims(tmp_path):
