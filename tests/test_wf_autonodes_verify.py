@@ -121,6 +121,14 @@ def test_us18_red_run_all_added_failing_is_expected_with_empty_not_red(tmp_path)
     assert json.loads((tmp_path / "red.json").read_text()) == entry
 
 
+def test_us18_red_run_expected_when_listed_file_has_no_failing_test_but_added_ids_all_fail(tmp_path):
+    listed = [*ADDED, "tests/test_fixture_only.py"]
+    ctx, _ = make_ctx(tmp_path, tests=lambda ids: {"code": 1, "failed": list(ADDED)}, added=lambda repo: list(ADDED))
+    outcome, entry, _ = autonodes.HANDLERS["red_run"](make_state(added=listed), ctx)
+    assert outcome == "expected"
+    assert entry == {"tests": listed, "failed": ADDED, "claimed": {"failed": listed, "reason_expected": True}, "not_red": [], "left_out": []}
+
+
 def test_us10_verify_tests_touched_even_when_suite_green(tmp_path):
     unit_md(tmp_path, "Lane: fast\n")
     ctx, _ = make_ctx(tmp_path, touched=lambda repo: ["tests/test_a.py"])
