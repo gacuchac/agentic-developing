@@ -432,3 +432,60 @@ def test_us30_logs_bad_input_and_returns_0(hook, tmp_path):
     assert code == 0
     assert len(lines) == 1
     assert lines[0]["outcome"] == "bad input"
+
+
+def _derived_setup(tmp_path: Path, claim_session: str | None = "s1") -> tuple[Path, Path, Path]:
+    (tmp_path / "session" / "subagents").mkdir(parents=True)
+    active, run, _ = _nested_setup(
+        tmp_path, _prompt(tmp_path / "run"), claim_session, name="session/subagents/agent-n1.jsonl"
+    )
+    return active, run, tmp_path / "session.jsonl"
+
+
+def _pre_handback_event(session_transcript: Path, session: str = "s1") -> str:
+    return json.dumps(
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "SubagentHandback",
+            "session_id": session,
+            "agent_id": "n1",
+            "agent_type": "qa",
+            "transcript_path": str(session_transcript),
+            "agent_transcript_path": None,
+            "cwd": str(session_transcript.parent),
+            "tool_input": {"message": "Report\n" + _block(json.dumps(RESULT))},
+        }
+    )
+
+
+def test_us37_pre_tool_use_handback_without_registry_entry_records_from_derived_agent_transcript(hook, tmp_path):
+    active, run, session = _derived_setup(tmp_path)
+    rec = Recorder()
+    assert hook.main(_pre_handback_event(session), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", RESULT)]
+
+
+def test_us37_derived_agent_transcript_records_only_while_this_session_holds_the_claim(hook, tmp_path):
+    active, run, session = _derived_setup(tmp_path)
+    rec = Recorder()
+    assert hook.main(_pre_handback_event(session), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", RESULT)]
+    (active / "claim.json").write_text(json.dumps({**CLAIM, "session": "other", "run": str(run)}))
+    assert hook.main(_pre_handback_event(session), active, rec) == 0
+    (active / "claim.json").unlink()
+    assert hook.main(_pre_handback_event(session), active, rec) == 0
+    assert len(rec.calls) == 1
+
+
+def test_us37_derived_agent_transcript_records_only_while_the_step_is_pending_for_the_agent(hook, tmp_path):
+    active, run, session = _derived_setup(tmp_path)
+    rec = Recorder()
+    assert hook.main(_pre_handback_event(session), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", RESULT)]
+    other_step = {**PENDING, "step_id": "u3-write-2"}
+    (run / "state.json").write_text(json.dumps({**STATE, "pending": other_step}))
+    assert hook.main(_pre_handback_event(session), active, rec) == 0
+    other_agent = {**PENDING, "agent": "implementer"}
+    (run / "state.json").write_text(json.dumps({**STATE, "pending": other_agent}))
+    assert hook.main(_pre_handback_event(session), active, rec) == 0
+    assert len(rec.calls) == 1
