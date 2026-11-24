@@ -127,7 +127,14 @@ def _pending_step(event: dict, active: Path, transcript: Path | None) -> tuple[P
     return _from_prompt(event, active, transcript) if transcript is not None else None
 
 
-def _log(active: Path, event: dict, pending: tuple[Path, str] | None, result: dict | None, outcome: str) -> None:
+def _log(
+    active: Path,
+    event: dict,
+    transcript: Path | None,
+    pending: tuple[Path, str] | None,
+    result: dict | None,
+    outcome: str,
+) -> None:
     """Append one JSON line describing this event and its outcome to `<active>/recorder.log`; skip when unwritable."""
     line = {
         "ts": datetime.now().astimezone().isoformat(),
@@ -136,6 +143,7 @@ def _log(active: Path, event: dict, pending: tuple[Path, str] | None, result: di
         "agent_type": event.get("agent_type") or "",
         "session": event.get("session_id") or "",
         "transcript": bool(event.get("agent_transcript_path")),
+        "agent_transcript": str(transcript) if transcript else "",
         "step": [str(pending[0]), pending[1]] if pending else None,
         "result": result is not None,
         "outcome": outcome,
@@ -156,7 +164,7 @@ def main(stdin: str, active: Path, record: Callable[[Path, str, dict], list[str]
     by this session, or no valid block records nothing. Each call appends one line to `<active>/recorder.log`
     with the outcome; logging never changes the return value."""
     event: dict = {}
-    pending = result = None
+    pending = result = transcript = None
     try:
         event = json.loads(stdin)
         transcript = _agent_transcript(event)
@@ -167,15 +175,23 @@ def main(stdin: str, active: Path, record: Callable[[Path, str, dict], list[str]
             or _transcript_result(event)
         )
     except Exception:
-        _log(active, event if isinstance(event, dict) else {}, pending, result, "bad input")
+        missing = transcript is not None and not transcript.exists()
+        _log(
+            active,
+            event if isinstance(event, dict) else {},
+            transcript,
+            pending,
+            result,
+            "no transcript" if missing else "bad input",
+        )
         return 0
     if pending is None or result is None:
-        _log(active, event, pending, result, "no step" if pending is None else "no result")
+        _log(active, event, transcript, pending, result, "no step" if pending is None else "no result")
         return 0
     errors = record(pending[0], pending[1], result)
     if errors:
         print("\n".join(errors), file=sys.stderr)
-    _log(active, event, pending, result, "refused" if errors else "recorded")
+    _log(active, event, transcript, pending, result, "refused" if errors else "recorded")
     return 2 if errors else 0
 
 
