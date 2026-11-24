@@ -188,7 +188,8 @@ def test_us10_commit_fix_does_not_resume_while_changes_are_uncommitted(tmp_path)
 def test_us10_commit_fix_does_not_resume_a_commit_the_state_already_holds(tmp_path):
     ctx, state, calls = _make(tmp_path, commit_raises=True, head=UNIT_HEAD)
     state["head"] = "deadbeef"
-    outcome, entry, _ = autonodes.HANDLERS["commit_fix"](state, ctx)
+    outcome, entry, new = autonodes.HANDLERS["commit_fix"](state, ctx)
     assert outcome == "refused"
     assert "sha" not in entry
+    assert new["head"] == "deadbeef"
     assert calls["evidence"] == []
