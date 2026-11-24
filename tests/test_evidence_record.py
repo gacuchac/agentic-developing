@@ -185,6 +185,15 @@ def test_us9_measure_reads_breaks_line_of_unit_md(tmp_path):
     assert _measure(repo, run, fix)["breaks"] == ["tests/test_a.py::test_a", "tests/x.py"]
 
 
+def test_us9_measure_describes_the_commit_not_the_working_tree(tmp_path):
+    repo, run, _ = _repo(tmp_path)
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f():\n    return 3\n"})
+    (repo / "src" / "a.py").write_text("def f():\n    return 2\n")
+    rec = _measure(repo, run, fix)
+    assert rec["green"] == []
+    assert er.complete(rec) is False
+
+
 def _write(repo: Path, run: Path, sha: str):
     cmd = [sys.executable, str(_SCRIPT), "write", "--run", str(run), "--sha", sha, "--python", sys.executable]
     return subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
