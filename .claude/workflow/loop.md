@@ -51,6 +51,23 @@ Every task gets a run folder `.claude/runs/<project>/<task-id>/` (git-ignored) h
 
 **Concurrency.** At most 3 subagents run at the same time, of any kind. The main orchestrator never has more than 3 running at once, whether decomposers, workflow orchestrators or any other. Each workflow orchestrator runs its own subagents one at a time.
 
+**Driving the engine (`wf`).** In this section `wf` means `~/Developing/.venv/bin/python ~/Developing/scripts/workflow/wf.py` and `<run>` is the task's run folder, as an absolute path. The engine holds the task's state in `<run>/state.json`; nobody edits that file by hand.
+
+1. **Start.** With `ask.md` and the plan in `<run>`, and the task's branch checked out: `wf start <run> --plan plan.md` (Simple and Sequential mode, in the project's main checkout), or `wf start <run> --plan plan.md --checkout <worktree> --mode parallel` (a workflow orchestrator, in its worktree). The session now holds the task: other sessions can't drive it, and this session's edits stay inside it. `wf status <run>` shows where a task is and resumes one after a break.
+2. **Ask what is next:** `wf options <run>`. It prints a JSON list.
+   - One entry with `"kind": "agent"`: launch the agent it names (`qa` or `implementer`) with the entry's `prompt` as the whole prompt. The prompt starts with the `wf-step:` and `Run folder:` lines the hooks need; a launch without them, or for a step the engine isn't waiting for, is refused. When the agent hands back, its result is recorded for you. If `wf status <run>` still shows that step pending, write the JSON of its `workflow-result` block to `<run>/result.json` and run `wf record <run> <step_id> <run>/result.json`.
+   - Entries with `"kind": "decide"`: the engine needs a judgement. Read the review it points at (`<run>/review-<pass>-<n>.md`) and the code or test lines it names, decide each finding on its merits, write the evidence to `<run>/evidence.json` and run `wf take <run> <option> --evidence <run>/evidence.json`. The engine refuses evidence that doesn't fit and says why.
+     - `correct` and `overstated`: `{"findings": [{"id": "T2", "reason": "..."}]}`.
+     - `wrong`: `{"findings": [{"id": "T2", "reason": "...", "file": "<path>", "line": <n>, "quote": "<that line, exactly>"}]}`; the quoted line is the one that contradicts the finding.
+     - `tests_wrong`: `{"test": "<failing test id>", "quote": "<the plan line the test contradicts>"}`. `code_wrong`: `{"tests": ["<failing test id>"]}`.
+     - `escalate`: `{"question": "..."}`; it stops the task for me. `architecture_stop`: `{"path": "<the proposal file>"}`; the architecture stop rule below applies.
+   - A pending `user` step: the task waits for me. Show me what the engine shows and stop.
+3. **Repeat** until `wf status <run>` shows the node `done`. The engine then releases the task. `wf report <run>` prints the decisions, dismissals, commits and dropped findings for the summary.
+
+What the engine does on its own, between those stops: writes the unit, runs the red run, commits the tests, starts and collects the `tests` review, runs the suite, chooses the lane, runs the `impl` review in the full lane, commits the code, writes the evidence record, moves to the next unit, and at the end runs the branch finish. A refused command prints the reason; fix what it names and run it again. Never use `--no-verify`, never commit a unit by hand while the engine is waiting on it, and never edit `state.json`.
+
+`wf release <run> --reason "<why>"` frees a task this session holds without finishing it. It is mine to ask for; a subagent can't run it.
+
 ### Plan (main orchestrator, for every task)
 
 1. **Pick ready tasks (just-in-time decomposition).** A task is ready when every task it depends on is merged into dev. Decompose only ready tasks, so a contract or architecture change upstream never forces a plan to be redone.
