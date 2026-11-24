@@ -152,3 +152,35 @@ def test_us11_default_ctx_collect_review_takes_only_the_handle(tmp_path):
     log.write_text("saved: /tmp/review-x.md\n")
     handle = {"pid": 2**22 + 12345, "log": str(log)}
     assert wf.default_ctx(run).collect_review(handle) == Path("/tmp/review-x.md")
+
+
+def _save_checkout(run, checkout):
+    s = st.new_state("t", "b", "l")
+    s["checkout"] = checkout
+    st.save(run, s)
+
+
+def test_us19_default_ctx_repo_is_stored_checkout(tmp_path):
+    _, run = _tree(tmp_path, "proj")
+    worktree = tmp_path / "wt"
+    _save_checkout(run, str(worktree))
+    assert wf.default_ctx(run).repo == worktree
+
+
+def test_us19_default_ctx_repo_falls_back_without_state(tmp_path):
+    _, run = _tree(tmp_path, "proj")
+    assert wf.default_ctx(run).repo == wf.repo_for(run)
+
+
+def test_us19_default_ctx_repo_falls_back_without_checkout(tmp_path):
+    _, run = _tree(tmp_path, "proj")
+    _save_checkout(run, None)
+    assert wf.default_ctx(run).repo == wf.repo_for(run)
+
+
+def test_us19_default_ctx_explicit_checkout_wins_over_state(tmp_path):
+    _, run = _tree(tmp_path, "proj")
+    _save_checkout(run, str(tmp_path / "stored"))
+    other = tmp_path / "given"
+    assert wf.default_ctx(run, other).repo == other
+    assert wf.default_ctx(tmp_path / "Developing" / ".claude" / "runs" / "proj" / "none", other).repo == other

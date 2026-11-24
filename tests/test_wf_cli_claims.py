@@ -128,3 +128,19 @@ def test_us13_status_of_held_task_runs_and_names_holder(env, monkeypatch, capsys
         monkeypatch.setenv(key, value)
     assert wf.main(["status", str(run)]) == 0
     assert "other-session" in capsys.readouterr().out
+
+
+def test_us19_take_claims_with_stored_worktree_as_checkout(env, monkeypatch, tmp_path):
+    run, active = env
+    assert wf.main(["start", str(run), "--plan", "plan.md"]) == 0
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    _g(worktree, "init", "-q", "-b", "feature/wt")
+    state = json.loads((run / "state.json").read_text())
+    state["checkout"] = str(worktree)
+    (run / "state.json").write_text(json.dumps(state))
+    for key, value in _session("s1").items():
+        monkeypatch.setenv(key, value)
+    wf.main(["take", str(run), "anything"])
+    held = json.loads((active / NAME).read_text())
+    assert held["checkout"] == str(worktree)
