@@ -5,7 +5,7 @@ The development workspace: a multi-model agent workflow for Claude Code (Opus or
 ## Set up once per machine
 1. Clone this repo to `~/Developing`.
 2. `git config --global includeIf.gitdir:~/Developing/.path ~/Developing/.gitconfig-workflow`: turns on the git hooks for every repo under `~/Developing`, and nowhere else: ruff and the slop checks on staged Python, the review gate (no commit until the previous one has a saved review), and the commit-subject check.
-3. `python3 -m venv .venv && .venv/bin/pip install pytest pyyaml hypothesis`, for the workflow's own tests.
+3. Python 3.12, the version CI runs (`brew install python@3.12`), then `python3.12 -m venv .venv && .venv/bin/pip install pytest pyyaml hypothesis`. The workflow's tests and every hook (git and Claude Code) run with this `.venv`.
 4. Codex CLI installed and signed in (`codex login`); `ruff` for the lint hook; `gh` signed in as the agents' account.
 
 ## Use
@@ -17,4 +17,4 @@ The development workspace: a multi-model agent workflow for Claude Code (Opus or
 - Evals: `/eval-create <project>/<task-id>`, `/eval-calibrate <run-id>`.
 
 ## Changing the workflow
-This repo follows its own rules: a `feature/` branch off `dev`, commits of at most 30 changed lines, a PR into `dev`. Its tests: `.venv/bin/python -m pytest -q`.
+This repo follows its own rules: a `feature/` branch off `dev`, one purpose per commit, each proven before the next, a PR into `dev`. Its tests: `.venv/bin/python -m pytest -q`.
