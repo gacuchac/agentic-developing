@@ -8,6 +8,6 @@ import sys
 from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parents[1] / "scripts" / "hooks"
-CHECKS = ("commit_cap.py", "lint_gate.py", "review_gate.py")
+CHECKS = ("commit_cap.py", "lint_gate.py", "review_gate.py", "claim_gate.py")
 failed = [subprocess.call([sys.executable, str(HOOKS / name)]) for name in CHECKS]
 sys.exit(1 if any(failed) else 0)
