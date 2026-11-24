@@ -489,3 +489,41 @@ def test_us37_derived_agent_transcript_records_only_while_the_step_is_pending_fo
     (run / "state.json").write_text(json.dumps({**STATE, "pending": other_agent}))
     assert hook.main(_pre_handback_event(session), active, rec) == 0
     assert len(rec.calls) == 1
+
+
+def test_us37_logs_no_transcript_when_the_derived_agent_transcript_is_missing(hook, tmp_path):
+    active, _, session = _derived_setup(tmp_path)
+    agent_file = tmp_path / "session" / "subagents" / "agent-n1.jsonl"
+    agent_file.unlink()
+    rec = Recorder()
+    assert hook.main(_pre_handback_event(session), active, rec) == 0
+    lines = _log_lines(active)
+    assert rec.calls == []
+    assert len(lines) == 1
+    assert lines[0]["outcome"] == "no transcript"
+    assert lines[0]["step"] is None
+    assert lines[0]["agent_transcript"] == str(agent_file)
+
+
+def test_us37_logs_no_transcript_when_agent_transcript_path_is_missing(hook, tmp_path):
+    active, _, transcript = _nested_setup(tmp_path, _prompt(tmp_path / "run"))
+    transcript.unlink()
+    rec = Recorder()
+    assert hook.main(_nested_event(transcript), active, rec) == 0
+    lines = _log_lines(active)
+    assert rec.calls == []
+    assert len(lines) == 1
+    assert lines[0]["outcome"] == "no transcript"
+    assert lines[0]["agent_transcript"] == str(transcript)
+
+
+def test_us37_log_names_the_agent_transcript_or_empty(hook, tmp_path):
+    active, _ = _setup(tmp_path)
+    rec = Recorder()
+    assert hook.main(_event(_block(json.dumps(RESULT))), active, rec) == 0
+    _, _, session = _derived_setup(tmp_path)
+    assert hook.main(_pre_handback_event(session), active, rec) == 0
+    lines = _log_lines(active)
+    assert lines[0]["agent_transcript"] == ""
+    assert lines[1]["outcome"] == "recorded"
+    assert lines[1]["agent_transcript"] == str(tmp_path / "session" / "subagents" / "agent-n1.jsonl")
