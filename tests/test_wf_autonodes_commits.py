@@ -17,7 +17,7 @@ SHA = "abc1234"
 OTHER_HEAD = "commit 999\nAuthor: t <t@t>\n\n    Some other subject\n"
 
 
-def _make(tmp_path, touched=("tests/test_x.py",), commit_raises=False, head=OTHER_HEAD):
+def _make(tmp_path, touched=("tests/test_x.py",), commit_raises=False, head=OTHER_HEAD, dirty=""):
     calls = {"commit": [], "log": [], "start_review": [], "evidence": []}
 
     def commit(repo, message, paths):
@@ -49,7 +49,7 @@ def _make(tmp_path, touched=("tests/test_x.py",), commit_raises=False, head=OTHE
         source=lambda repo, commit, base: head,
         commit=commit,
         evidence=evidence,
-        diff=lambda repo: "",
+        diff=lambda repo: dirty,
         file_at=unused,
         log=lambda run, cells: calls["log"].append((run, cells)),
         now=lambda: "2026-01-01T00:00:00",
@@ -171,3 +171,24 @@ def test_us10_commit_fix_resumes_on_a_real_repo_whose_head_is_the_unit_commit(tm
     assert outcome == "done"
     assert new["head"] == sha
     assert calls["evidence"] == [(repo, tmp_path, sha, ctx.python)]
+
+
+UNIT_HEAD = "commit deadbeef\nAuthor: t <t@t>\n\n    US-9: Do the thing\n"
+
+
+def test_us10_commit_fix_does_not_resume_while_changes_are_uncommitted(tmp_path):
+    ctx, state, calls = _make(tmp_path, commit_raises=True, head=UNIT_HEAD, dirty="--- a/x\n+++ b/x\n+new\n")
+    outcome, entry, new = autonodes.HANDLERS["commit_fix"](state, ctx)
+    assert outcome == "refused"
+    assert entry["error"] == "hook said no"
+    assert new["head"] == "oldhead"
+    assert calls["evidence"] == []
+
+
+def test_us10_commit_fix_does_not_resume_a_commit_the_state_already_holds(tmp_path):
+    ctx, state, calls = _make(tmp_path, commit_raises=True, head=UNIT_HEAD)
+    state["head"] = "deadbeef"
+    outcome, entry, _ = autonodes.HANDLERS["commit_fix"](state, ctx)
+    assert outcome == "refused"
+    assert "sha" not in entry
+    assert calls["evidence"] == []
