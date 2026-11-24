@@ -124,3 +124,15 @@ def test_us18_fix_imports_leaves_a_sorted_block_unchanged(tmp_path):
     test_file.write_text(text)
     checks.fix_imports(tmp_path, ["tests/test_a.py"])
     assert test_file.read_text() == text
+
+
+def test_us18_fix_imports_without_ruff_returns_and_leaves_file_unchanged(tmp_path, monkeypatch):
+    (tmp_path / "tests").mkdir()
+    test_file = tmp_path / "tests" / "test_a.py"
+    text = "import sys\nimport os\n\n\ndef test_a():\n    assert os and sys\n"
+    test_file.write_text(text)
+    empty_bin = tmp_path / "empty_bin"
+    empty_bin.mkdir()
+    monkeypatch.setenv("PATH", str(empty_bin))
+    checks.fix_imports(tmp_path, ["tests/test_a.py"])
+    assert test_file.read_text() == text
