@@ -37,7 +37,7 @@ A rule that matters is enforced by a check; prose is for judgement calls. When t
 | A commit is proven before the next one is made: a `tests` or `commit` review, or a complete evidence record | `pre-commit` (`review_gate.py`, `evidence_record.py`) |
 | Every added test fails before the code it tests exists | the engine's red run (`autonodes.py`, `checks.added_tests`) |
 | A commit has one purpose: a change that leaves its unit's files, or is far over its estimate, is read before it is committed | the engine's `verify` (`units.scope_reasons`), then the `impl` review I1 |
-| A task planned without a decomposer stays small | the engine's `verify` (`units.scope_reasons`), then the `impl` review |
+| A one-unit plan written without a decomposer is read before commit when its change leaves the plan's files or passes the larger of 30 lines and twice its estimate | the engine's `verify` (`units.scope_reasons`), then the `impl` review |
 | Contracts stay stable unless an approved `architecture.md` covers the change | `principles` review P3 (judgement) |
 
 ## How work is routed
