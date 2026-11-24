@@ -173,3 +173,85 @@ def test_us19_default_ctx_explicit_checkout_wins_over_state(tmp_path):
     other = tmp_path / "given"
     assert wf.default_ctx(run, other).repo == other
     assert wf.default_ctx(tmp_path / "Developing" / ".claude" / "runs" / "proj" / "none", other).repo == other
+
+
+def _fix_section(prompt):
+    lines = prompt.splitlines()
+    heads = [i for i, line in enumerate(lines) if line.lstrip("# ").rstrip(":").strip() == "What to fix"]
+    return [] if not heads else [line.strip() for line in lines[heads[-1] + 1 :]]
+
+
+def _fix_state(entries, agent, step):
+    s = st.new_state("t", "b", "l")
+    for e in entries:
+        s = st.with_entry(s, e, "n")
+    s["node"] = "implement" if agent == "implementer" else "qa_fix"
+    s["pending"] = {"kind": "agent", "agent": agent, "step": step, "step_id": "u1-x-1"}
+    return s
+
+
+def test_us17_correct_decision_prompt_has_what_to_fix_with_finding_line_and_reason(tmp_path):
+    ws, run = _tree(tmp_path, "Developing")
+    (run / "unit.md").write_text("do the unit")
+    other, main = run / "review-other.md", run / "review-impl.md"
+    other.write_text("O1: FAIL — unrelated\n")
+    main.write_text("# Review\nI0: PASS — fine\nI1: FAIL — the alias is wrong\nI2: FAIL — other thing\n")
+    review = {
+        "node": "impl_review",
+        "outcome": "CHANGES",
+        "reviews": [
+            {"pass": "a", "review": str(other), "verdict": "CHANGES", "fails": ["O1"]},
+            {"pass": "b", "review": str(main), "verdict": "CHANGES", "fails": ["I1", "I2"]},
+        ],
+    }
+    decision = {
+        "node": "impl_decide",
+        "decision": "correct",
+        "evidence": {"findings": [{"id": "I1", "reason": "the alias maps to the wrong name"}]},
+        "to": "implement",
+    }
+    s = _fix_state([review, decision], "implementer", "code")
+    prompt = wf.options_view(s, _ctx(ws, run))[0]["prompt"]
+    sec = _fix_section(prompt)
+    assert "I1: FAIL — the alias is wrong" in sec
+    assert "Decision: the alias maps to the wrong name" in sec
+    assert not any(line.startswith(("I2:", "O1:")) for line in sec)
+
+
+def test_us17_tests_wrong_decision_prompt_has_test_id_and_plan_quote(tmp_path):
+    ws, run = _tree(tmp_path, "Developing")
+    (run / "unit.md").write_text("do the unit")
+    decision = {
+        "node": "fail_decide",
+        "decision": "tests_wrong",
+        "evidence": {"test": "tests/test_a.py::test_x", "quote": "the alias maps to beta"},
+        "to": "qa_fix",
+    }
+    s = _fix_state([decision], "qa", "fix")
+    sec = _fix_section(wf.options_view(s, _ctx(ws, run))[0]["prompt"])
+    assert "Test: tests/test_a.py::test_x" in sec
+    assert "Plan line: the alias maps to beta" in sec
+
+
+def test_us17_code_wrong_decision_prompt_lists_failing_tests(tmp_path):
+    ws, run = _tree(tmp_path, "Developing")
+    (run / "unit.md").write_text("do the unit")
+    decision = {
+        "node": "fail_decide",
+        "decision": "code_wrong",
+        "evidence": {"tests": ["tests/test_a.py::test_x", "tests/test_a.py::test_y"]},
+        "to": "implement",
+    }
+    s = _fix_state([decision], "implementer", "code")
+    sec = _fix_section(wf.options_view(s, _ctx(ws, run))[0]["prompt"])
+    assert "Failing tests: tests/test_a.py::test_x, tests/test_a.py::test_y" in sec
+
+
+def test_us17_first_implement_prompt_has_no_section_but_one_after_a_decision(tmp_path):
+    ws, run = _tree(tmp_path, "Developing")
+    (run / "unit.md").write_text("do the unit")
+    decision = {"node": "fail_decide", "decision": "code_wrong", "evidence": {"tests": ["t::a"]}, "to": "implement"}
+    plain = wf.options_view(_fix_state([], "implementer", "code"), _ctx(ws, run))[0]["prompt"]
+    fixed = wf.options_view(_fix_state([decision], "implementer", "code"), _ctx(ws, run))[0]["prompt"]
+    assert _fix_section(plain) == []
+    assert "Failing tests: t::a" in _fix_section(fixed)
