@@ -62,6 +62,30 @@ def _prompt_of(transcript: Path) -> str:
     return ""
 
 
+def _transcript_messages(transcript: Path) -> list[str]:
+    """Return the texts of the assistant records of the JSONL `transcript`, in order: text parts and hand-back calls."""
+    texts = []
+    for line in transcript.read_text().splitlines():
+        message = json.loads(line).get("message") or {}
+        parts = message.get("content")
+        if message.get("role") != "assistant" or not isinstance(parts, list):
+            continue
+        for part in parts:
+            if part.get("type") == "text":
+                texts.append(part.get("text") or "")
+            elif part.get("type") == "tool_use" and part.get("name") == "SubagentHandback":
+                texts.append((part.get("input") or {}).get("message") or "")
+    return texts
+
+
+def _transcript_result(event: dict) -> dict | None:
+    """Return the last valid `workflow-result` block in the assistant records of the event's transcript, or None."""
+    if not event.get("agent_transcript_path"):
+        return None
+    results = (extract_result(text) for text in reversed(_transcript_messages(Path(event["agent_transcript_path"]))))
+    return next((r for r in results if r is not None), None)
+
+
 def _is_pending(run: Path, step_id: str, agent_type: str | None) -> bool:
     """Return True when `run`'s state is pending the agent step `step_id` for `agent_type`."""
     pending = (json.loads((run / "state.json").read_text()).get("pending")) or {}
@@ -100,8 +124,10 @@ def main(stdin: str, active: Path, record: Callable[[Path, str, dict], list[str]
     try:
         event = json.loads(stdin)
         pending = _pending_step(event, active)
-        result = extract_result(event.get("last_assistant_message") or "") or extract_result(
-            event.get("tool_input", {}).get("message") or ""
+        result = (
+            extract_result(event.get("last_assistant_message") or "")
+            or extract_result(event.get("tool_input", {}).get("message") or "")
+            or _transcript_result(event)
         )
     except Exception:
         return 0
