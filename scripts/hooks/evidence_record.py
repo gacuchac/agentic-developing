@@ -86,8 +86,9 @@ def _in(repo: Path) -> Iterator[None]:
 
 
 def is_failed(test_id: str, failed: list[str]) -> bool:
-    """Return True when `failed` has `test_id` itself or one of its parametrized cases `test_id[...]`."""
-    return any(f == test_id or f.startswith(test_id + "[") for f in failed)
+    """Return True when `failed` has `test_id`, one of its parametrized cases `test_id[...]`, or its file."""
+    file_id = test_id.split("::")[0]
+    return any(f in (test_id, file_id) or f.startswith(test_id + "[") for f in failed)
 
 
 def failures_at(repo: Path, commit: str, targets: list[str], python: Path) -> list[str]:
