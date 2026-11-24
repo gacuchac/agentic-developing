@@ -1,10 +1,14 @@
-"""Run a repo's pytest and read the failing test ids."""
+"""Run a repo's pytest, read the failing test ids and measure a pending change."""
 from __future__ import annotations
 
 import contextlib
+import importlib.util
+import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 _FAILURE_LINE = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.M)
@@ -49,3 +53,38 @@ def fix_imports(repo: Path, paths: list[str]) -> None:
             ["ruff", "check", "--fix", "--select", "I", "--config", str(config), *paths],
             cwd=repo, capture_output=True, check=False,
         )
+
+
+def _commit_cap() -> object:
+    path = Path(__file__).resolve().parents[2] / "hooks" / "commit_cap.py"
+    spec = importlib.util.spec_from_file_location("commit_cap", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def change_size(repo: Path) -> dict[str, int]:
+    """Return the changed lines per file of repo's uncommitted changes against HEAD, untracked files included.
+
+    Counted with the rules of scripts/hooks/commit_cap.py: deleted, test, document and skill files and files
+    counting 0 are left out. The repo's own index is not touched.
+    """
+    cap = _commit_cap()
+    with tempfile.TemporaryDirectory() as tmp:
+        index = Path(tmp) / "index"
+        real_index = Path(subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-path", "index"],
+            cwd=repo, capture_output=True, text=True, check=True,
+        ).stdout.strip())
+        if real_index.exists():
+            shutil.copy(real_index, index)
+        env = {**os.environ, "GIT_INDEX_FILE": str(index)}
+
+        def git(*args: str) -> str:
+            return subprocess.run(["git", *args], cwd=repo, env=env, capture_output=True, text=True, check=True).stdout
+
+        git("add", "-A")
+        numstat, name_status = (git("diff", "--cached", flag, "-M", "HEAD") for flag in ("--numstat", "--name-status"))
+    counts = cap.without_deleted_files(cap.file_counts(numstat), name_status)
+    counts = cap.without_skill_files(cap.without_doc_files(cap.without_test_files(counts)))
+    return {path: n for path, n in counts.items() if n}
