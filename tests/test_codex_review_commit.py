@@ -131,43 +131,72 @@ def test_us4_every_pass_has_a_prompt_file(tmp_path):
         assert cr.pass_prompt_path(name, tmp_path).exists(), name
 
 
-def test_us3_non_head_sha_gets_a_reason_naming_it(tmp_path, monkeypatch):
-    _base, second, _third = _repo_with_three_commits(tmp_path)
-    monkeypatch.chdir(tmp_path)
-    reason = cr.head_commit_problem(second)
-    assert reason and second in reason
+def test_us3_review_tree_checks_out_that_sha_and_is_removed_afterwards(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _base, second, _third = _repo_with_three_commits(repo)
+    (repo / "scratch.txt").write_text("dirty\n")
+    monkeypatch.chdir(repo)
+    with cr.review_tree(second) as tree:
+        seen = Path(tree)
+        assert (seen / "two.txt").read_text() == "two body\n"
+        assert not (seen / "three.txt").exists()
+        assert not (seen / "scratch.txt").exists()
+    assert not seen.exists()
 
 
-def test_us3_head_with_clean_tree_gives_no_problem(tmp_path, monkeypatch):
-    *_, third = _repo_with_three_commits(tmp_path)
-    monkeypatch.chdir(tmp_path)
-    assert cr.head_commit_problem(third) == ""
+def test_us3_review_tree_is_removed_when_the_block_raises(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _base, second, _third = _repo_with_three_commits(repo)
+    monkeypatch.chdir(repo)
+    seen = None
+    try:
+        with cr.review_tree(second) as tree:
+            seen = Path(tree)
+            assert seen.exists()
+            raise RuntimeError("boom")
+    except RuntimeError:
+        pass
+    assert seen is not None and not seen.exists()
 
 
-def test_us3_head_with_modified_tracked_file_gets_a_reason(tmp_path, monkeypatch):
-    *_, third = _repo_with_three_commits(tmp_path)
-    (tmp_path / "three.txt").write_text("changed\n")
-    monkeypatch.chdir(tmp_path)
-    assert cr.head_commit_problem(third) != ""
-
-
-def test_us3_head_with_untracked_file_gets_a_reason(tmp_path, monkeypatch):
-    *_, third = _repo_with_three_commits(tmp_path)
-    (tmp_path / "scratch.txt").write_text("new\n")
-    monkeypatch.chdir(tmp_path)
-    assert cr.head_commit_problem(third) != ""
-
-
-def test_us3_main_refuses_a_non_head_commit_before_codex(tmp_path):
-    _base, second, _third = _repo_with_three_commits(tmp_path)
+def test_us3_main_reviews_a_non_head_commit_inside_a_worktree(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _base, second, _third = _repo_with_three_commits(repo)
+    (repo / "scratch.txt").write_text("dirty\n")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    cwd_file = tmp_path / "cwd.txt"
+    stub = bin_dir / "codex"
+    stub.write_text(
+        "#!/bin/sh\n"
+        f"pwd -P > '{cwd_file}'\n"
+        'while [ $# -gt 0 ]; do\n'
+        '  if [ "$1" = "--output-last-message" ]; then echo "VERDICT: PASS" > "$2"; fi\n'
+        "  shift\n"
+        "done\n"
+        "exit 0\n"
+    )
+    stub.chmod(0o755)
+    ask, plan, run_dir = tmp_path / "ask.md", tmp_path / "plan.md", tmp_path / "run"
+    ask.write_text("ask")
+    plan.write_text("plan")
+    run_dir.mkdir()
     env = {k: v for k, v in os.environ.items() if k not in ("CODEX_LUNA_MODEL", "CODEX_SOL_MODEL")}
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     run = subprocess.run(
-        [sys.executable, str(_path), "commit", "--commit", second, "--ask-file", "a", "--plan-file", "p"],
-        cwd=tmp_path,
+        [sys.executable, str(_path), "commit", "--commit", second, "--ask-file", str(ask),
+         "--plan-file", str(plan), "--run-dir", str(run_dir)],
+        cwd=repo,
         env=env,
         capture_output=True,
         text=True,
         check=False,
     )
-    assert run.returncode != 0
-    assert "refused" in run.stderr
+    assert "refused" not in run.stderr
+    assert run.returncode == 0, run.stderr
+    ran_in = Path(cwd_file.read_text().strip())
+    assert ran_in != repo.resolve()
+    assert not ran_in.exists()
