@@ -157,3 +157,26 @@ def test_us18_over_cap_counts_tracked_file_changes(tmp_path):
     text = checks.over_cap(repo)
     assert text.startswith("Commit blocked: 31 changed lines, limit 30.")
     assert "base.py" in text
+
+
+def test_us18_over_cap_refusal_has_per_file_line_in_hook_format(tmp_path):
+    repo = _cap_repo(tmp_path)
+    (repo / "big.py").write_text(_lines(31))
+    text = checks.over_cap(repo)
+    assert "    31  big.py" in text.splitlines()[1:]
+
+
+def test_us18_over_cap_none_for_long_skill_file(tmp_path):
+    repo = _cap_repo(tmp_path)
+    (repo / ".claude" / "skills" / "foo").mkdir(parents=True)
+    (repo / ".claude" / "skills" / "foo" / "tool.py").write_text(_lines(80))
+    assert checks.over_cap(repo) is None
+
+
+def test_us18_over_cap_none_for_deleting_long_tracked_file(tmp_path):
+    repo = _cap_repo(tmp_path)
+    (repo / "long.py").write_text(_lines(80))
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "long")
+    (repo / "long.py").unlink()
+    assert checks.over_cap(repo) is None
