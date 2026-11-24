@@ -277,3 +277,14 @@ def test_us9_cli_write_accepts_short_tests_commit(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     saved = json.loads((run / f"evidence-{part2}.json").read_text())
     assert saved["added"] == ["tests/test_b.py::test_b"]
+
+
+def test_us9_measure_follow_up_test_commit_edits_are_not_tampering(tmp_path):
+    repo, run, tests_sha = _repo(tmp_path)
+    _commit(repo, "test(US-1): fix review findings", {"tests/test_b.py": _TEST_B + "    assert isinstance(f(), int)\n"})
+    fix = _commit(repo, "US-1: fix", {"src/a.py": "def f():\n    return 2\n"})
+    rec = er.measure(repo, run, fix, Path(sys.executable), tests_commit=tests_sha)
+    assert rec["tests_commit"] == tests_sha
+    assert rec["added"] == ["tests/test_b.py::test_b"]
+    assert rec["tests_touched"] == []
+    assert er.complete(rec) is True
