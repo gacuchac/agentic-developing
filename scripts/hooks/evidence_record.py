@@ -26,16 +26,23 @@ def added_tests(diff: str) -> list[str]:
     return found
 
 
+def failing_fields(record: dict) -> list[str]:
+    """Return the names of the fields of a full `record` that keep it from being complete."""
+    added = set(record["added"])
+    ok = {
+        "added": bool(added) or not record["code_changed"],
+        "red": added <= set(record["red"]),
+        "green": added <= set(record["green"]),
+        "failed": set(record["failed"]) <= set(record["breaks"]),
+        "tests_touched": not record["tests_touched"],
+        "uncovered": not record["uncovered"],
+    }
+    return [name for name, good in ok.items() if not good]
+
+
 def complete(record: dict) -> bool:
-    """Return True when added tests are red and green and nothing stray failed, changed or is uncovered."""
-    added = set(record.get("added", ()))
-    return (
-        all(f in record for f in _FIELDS)
-        and (bool(added) or not record["code_changed"])
-        and added <= set(record["red"]) & set(record["green"])
-        and set(record["failed"]) <= set(record["breaks"])
-        and not (record["tests_touched"] or record["uncovered"])
-    )
+    """Return True when every field is present and none keeps the record from being complete."""
+    return all(f in record for f in _FIELDS) and not failing_fields(record)
 
 
 def load_module(path: Path) -> ModuleType:
@@ -80,28 +87,26 @@ def is_failed(test_id: str, failed: list[str]) -> bool:
     return any(f == test_id or f.startswith(test_id + "[") for f in failed)
 
 
-def red_ids(repo: Path, commit: str, added: list[str], python: Path) -> list[str]:
-    """Return the `added` test ids that fail in a worktree of `repo` at `commit`."""
+def failures_at(repo: Path, commit: str, targets: list[str], python: Path) -> list[str]:
+    """Return the ids failing when pytest runs `targets` (all tests if empty) in a worktree of `repo` at `commit`."""
     checks = load_module(_SCRIPTS / "workflow" / "effects" / "checks.py")
     with _in(repo), load_module(_SCRIPTS / "codex_review.py").review_tree(commit) as tree:
-        failed = checks.run_pytest(tree, added, python)["failed"]
-    return [t for t in added if is_failed(t, failed)]
+        return checks.run_pytest(tree, targets, python)["failed"]
 
 
 def measure(repo: Path, run: Path, sha: str, python: Path) -> dict:
     """Return the evidence record of the fix commit `sha` in `repo` (fields: see architecture.md)."""
-    checks = load_module(_SCRIPTS / "workflow" / "effects" / "checks.py")
     contracts = load_module(_SCRIPTS / "workflow" / "contracts.py")
     commit = tests_commit(repo, sha)
     added = added_tests(_git(repo, "show", "--format=", commit)) if commit else []
     span = f"{commit}..{sha}" if commit else f"{sha}^..{sha}"
-    failed = checks.run_pytest(repo, [], python)["failed"]
+    failed = failures_at(repo, sha, [], python)
     names = contracts.changed_signatures(_git(repo, "diff", span))
     paths = _git(repo, "show", "--name-only", "--format=", sha).split()
     return {
         "tests_commit": commit,
         "added": added,
-        "red": red_ids(repo, commit, added, python) if commit else [],
+        "red": [t for t in added if is_failed(t, failures_at(repo, commit, added, python))],
         "green": [t for t in added if not is_failed(t, failed)],
         "failed": failed,
         "breaks": declared_breaks(run),
