@@ -82,3 +82,27 @@ def test_us15_main_returns_0_without_session(tmp_path, monkeypatch):
 
 def test_us15_pre_commit_runs_claim_gate():
     assert "claim_gate.py" in (ROOT / ".githooks" / "pre-commit").read_text()
+
+
+def _unborn_repo(tmp_path: Path, branch: str) -> Path:
+    repo = tmp_path / "unborn"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", branch], cwd=repo, check=True)
+    return repo
+
+
+def test_us27_unborn_head_branch_held_by_other_session_is_refused(tmp_path, monkeypatch, capsys):
+    mod, _ = _setup(tmp_path, "feature/x", [_claim("other", "feature/x")])
+    repo = _unborn_repo(tmp_path, "feature/x")
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "me")
+    assert mod.main() == 1
+    assert "other" in capsys.readouterr().err
+
+
+def test_us27_unborn_head_without_claims_passes(tmp_path, monkeypatch):
+    mod, _ = _setup(tmp_path, "feature/x", [])
+    repo = _unborn_repo(tmp_path, "feature/x")
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "me")
+    assert mod.main() == 0
