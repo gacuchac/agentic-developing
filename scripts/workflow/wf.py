@@ -3,6 +3,9 @@
 from collections import Counter
 from pathlib import Path
 
+import agent_steps
+from autonodes import Ctx
+
 _EVIDENCE = {
     "correct": ["findings"],
     "overstated": ["findings"],
@@ -45,3 +48,21 @@ def repo_for(run: Path) -> Path:
     """Return the repo of a run folder: the workspace itself, or its project folder."""
     workspace = run.parents[3]
     return workspace if run.parent.name == workspace.name else workspace / run.parent.name
+
+
+def _launch(state: dict, ctx: Ctx) -> dict:
+    pending = state["pending"]
+    agent, step, step_id = pending["agent"], pending["step"], pending["step_id"]
+    file = ctx.run.parents[3] / ".claude" / "workflow" / "prompts" / f"{agent}-{step}.md"
+    unit = ctx.run / "unit.md"
+    prompt = agent_steps.render_prompt(
+        agent,
+        step,
+        step_id,
+        ctx.run,
+        ctx.repo,
+        unit.read_text() if unit.is_file() else "",
+        file.read_text() if file.is_file() else None,
+    )
+    error = (state["history"] or [{}])[-1].get("error", "")
+    return {"id": "launch", "kind": "agent", "agent": agent, "step_id": step_id, "prompt": prompt + error}
