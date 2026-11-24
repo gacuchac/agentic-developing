@@ -154,8 +154,11 @@ def default_ctx(run: Path) -> Ctx:
     )
 
 
-def start_state(run: Path, plan: str, ctx: Ctx) -> tuple[dict | None, list[str]]:
+def start_state(run: Path, plan: str, ctx: Ctx, checkout: Path | None = None,
+                mode: str = "sequential") -> tuple[dict | None, list[str]]:
     """Create the state of a task and advance it to its first agent step.
+
+    The branch and launch commit are read in checkout (the repo of the run when None); both are stored with mode.
 
     Returns (state, []) on success. Returns (None, errors) when run/state.json exists, run/<plan> is
     missing or has no units, or the branch and launch commit cannot be found.
@@ -166,11 +169,12 @@ def start_state(run: Path, plan: str, ctx: Ctx) -> tuple[dict | None, list[str]]
         return None, [f"{run / plan} is missing"]
     if not units.plan_units((run / plan).read_text()):
         return None, [f"{plan} has no units"]
+    where = (checkout or ctx.repo).resolve()
     try:
-        branch, launch = gitops.launch_info(ctx.repo)
+        branch, launch = gitops.launch_info(where)
     except RuntimeError as e:
         return None, [str(e).strip()]
-    state = st.new_state(f"{run.parent.name}/{run.name}", branch, launch, plan)
+    state = st.new_state(f"{run.parent.name}/{run.name}", branch, launch, plan, mode, str(where))
     return engine.advance(state, ctx), []
 
 
@@ -222,6 +226,8 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("release").add_argument("run", type=Path)
     sub.choices["release"].add_argument("--reason", required=True)
     sub.choices["start"].add_argument("--plan", default="plan.md")
+    sub.choices["start"].add_argument("--checkout", type=Path)
+    sub.choices["start"].add_argument("--mode", choices=("simple", "sequential", "parallel"), default="sequential")
     sub.choices["take"].add_argument("option")
     sub.choices["take"].add_argument("--evidence", type=Path)
     sub.choices["record"].add_argument("step_id")
@@ -232,7 +238,7 @@ def _parser() -> argparse.ArgumentParser:
 def _run(args: argparse.Namespace, ctx: Ctx) -> tuple[dict | None, list[str]]:
     run = args.run
     if args.cmd == "start":
-        return start_state(run, args.plan, ctx)
+        return start_state(run, args.plan, ctx, args.checkout, args.mode)
     state = st.load(run)
     if args.cmd == "take":
         evidence = json.loads(args.evidence.read_text()) if args.evidence else {}

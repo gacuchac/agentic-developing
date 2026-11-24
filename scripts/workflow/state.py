@@ -7,9 +7,14 @@ import tempfile
 from pathlib import Path
 
 
-def new_state(task: str, branch: str, launch: str, plan: str = "plan.md", mode: str = "sequential") -> dict:
-    """Return the initial state: build stage, unit 1, node write_unit, round 1, no history."""
-    return {"task": task, "branch": branch, "launch": launch, "mode": mode, "plan": plan, "stage": "build", "unit": 1,
+def new_state(task: str, branch: str, launch: str, plan: str = "plan.md", mode: str = "sequential",
+              checkout: str | None = None) -> dict:
+    """Return the initial state: build stage, unit 1, node write_unit, round 1, no history.
+
+    checkout is the path of the working checkout of the task, or None.
+    """
+    return {"task": task, "branch": branch, "launch": launch, "mode": mode, "checkout": checkout, "plan": plan,
+            "stage": "build", "unit": 1,
             "fix": 0, "node": "write_unit", "round": 1, "pending": {"kind": "auto"}, "head": None, "history": []}
 
 
