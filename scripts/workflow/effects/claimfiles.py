@@ -24,3 +24,13 @@ def read(active: Path, name: str) -> dict | None:
     except (OSError, ValueError):
         return None
 
+
+def remove(active: Path, name: str) -> None:
+    """Delete `active/name`; a missing file is fine."""
+    (active / name).unlink(missing_ok=True)
+
+
+def owned_by(active: Path, session: str) -> list[str]:
+    """Return the names of the claim files in `active` whose session is `session`."""
+    names = (p.name for p in active.iterdir()) if active.is_dir() else ()
+    return [n for n in names if (read(active, n) or {}).get("session") == session]
