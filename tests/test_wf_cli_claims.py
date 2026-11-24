@@ -134,8 +134,7 @@ def test_us19_take_claims_with_stored_worktree_as_checkout(env, monkeypatch, tmp
     run, active = env
     assert wf.main(["start", str(run), "--plan", "plan.md"]) == 0
     worktree = tmp_path / "wt"
-    worktree.mkdir()
-    _g(worktree, "init", "-q", "-b", "feature/wt")
+    _g(tmp_path / "Developing" / "proj", "worktree", "add", "-q", "-b", "feature/wt", str(worktree), "dev")
     state = json.loads((run / "state.json").read_text())
     state["checkout"] = str(worktree)
     (run / "state.json").write_text(json.dumps(state))
@@ -143,4 +142,4 @@ def test_us19_take_claims_with_stored_worktree_as_checkout(env, monkeypatch, tmp
         monkeypatch.setenv(key, value)
     wf.main(["take", str(run), "anything"])
     held = json.loads((active / NAME).read_text())
-    assert held["checkout"] == str(worktree)
+    assert Path(held["checkout"]).resolve() == worktree.resolve()
