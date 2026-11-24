@@ -13,7 +13,7 @@ def _entries(event: str, matcher: str | None) -> list[dict]:
 
 
 def _command(name: str) -> str:
-    return f'python3 "${{CLAUDE_PROJECT_DIR}}"/scripts/hooks/{name}.py'
+    return f'"${{CLAUDE_PROJECT_DIR}}"/.venv/bin/python "${{CLAUDE_PROJECT_DIR}}"/scripts/hooks/{name}.py'
 
 
 def _assert_wired(event: str, matcher: str | None, name: str) -> dict:
