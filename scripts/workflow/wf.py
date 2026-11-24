@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import sys
 import time
 from collections import Counter
@@ -20,7 +21,7 @@ import graph
 import state as st
 import units
 from autonodes import Ctx
-from effects import checks, gitops, procs, reviews
+from effects import checks, claimfiles, gitops, procs, reviews
 
 _EVIDENCE = {
     "correct": ["findings"],
@@ -209,9 +210,16 @@ def _run(args: argparse.Namespace, ctx: Ctx) -> tuple[dict | None, list[str]]:
     return engine.record(state, args.step_id, json.loads(args.result.read_text()), ctx)
 
 
+def _holder_line(run: Path) -> str:
+    name = claims.claim_name(run.parent.name, run.name)
+    holder = claimfiles.read(run.parents[1] / ".active", name)
+    return f"held by: {holder['session']} on {holder['branch']} since {holder['since']}" if holder else "held by: -"
+
+
 def _show(args: argparse.Namespace, ctx: Ctx) -> None:
     if args.cmd == "status":
         print(status_text(st.load(args.run)))
+        print(_holder_line(args.run))
     elif args.cmd == "options":
         print(json.dumps(options_view(st.load(args.run), ctx), indent=2))
     else:
@@ -220,12 +228,16 @@ def _show(args: argparse.Namespace, ctx: Ctx) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run one wf command; return 0, or 1 after printing the refusal errors to stderr with nothing saved."""
+    """Run one wf command; return 0; 2 when another session holds the task; 1 on refusal errors (printed to stderr)."""
     args = _parser().parse_args(argv)
     ctx = default_ctx(args.run)
     if args.cmd not in ("start", "take", "record"):
         _show(args, ctx)
         return 0
+    errors = run_claim(args.run, os.environ, ctx)
+    if errors:
+        print("\n".join(errors), file=sys.stderr)
+        return 2
     state, errors = _run(args, ctx)
     if errors:
         print("\n".join(errors), file=sys.stderr)
