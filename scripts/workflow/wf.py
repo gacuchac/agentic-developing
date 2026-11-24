@@ -1,9 +1,11 @@
 """Plain-text views of a task's state and of its decision log."""
 
+import importlib.util
 from collections import Counter
 from pathlib import Path
 
 import agent_steps
+import decisions
 import engine
 import graph
 from autonodes import Ctx
@@ -87,3 +89,19 @@ def options_view(state: dict, ctx: Ctx) -> list[dict]:
         {"id": o, "kind": kind, "to": graph.EDGES[node].get(o, graph.STOPS.get(o)), "evidence": _EVIDENCE[o]}
         for o in shown
     ]
+
+
+def _measure() -> object:
+    path = Path(__file__).resolve().parents[1] / "hooks" / "evidence_record.py"
+    spec = importlib.util.spec_from_file_location("evidence_record", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.measure
+
+
+def _logger(run: Path) -> object:
+    def log(_run: Path, cells: list[str]) -> None:
+        path = run / "decisions.tsv"
+        path.write_text(decisions.append_text(path.read_text() if path.is_file() else "", cells))
+
+    return log
