@@ -10,8 +10,20 @@ _path = Path(__file__).resolve().parents[1] / "scripts" / "hooks" / "subagent_re
 
 PENDING = {"kind": "agent", "agent": "qa", "step": "write", "step_id": "u3-write-1"}
 STATE = {"task": "t", "node": "write_unit", "pending": PENDING}
-CLAIM = {"session": "s1", "pid": 1, "pid_start": "x", "run": "", "checkout": "/c", "branch": "feature/t", "since": "now"}
-RESULT = {"tests_added": ["tests/test_x.py"], "red_run": {"failed": ["test_x"], "reason_expected": True}, "left_out": []}
+CLAIM = {
+    "session": "s1",
+    "pid": 1,
+    "pid_start": "x",
+    "run": "",
+    "checkout": "/c",
+    "branch": "feature/t",
+    "since": "now",
+}
+RESULT = {
+    "tests_added": ["tests/test_x.py"],
+    "red_run": {"failed": ["test_x"], "reason_expected": True},
+    "left_out": [],
+}
 
 
 @pytest.fixture
@@ -43,8 +55,9 @@ def _register(active: Path, agent_id: str, run: Path, step_id: str, agent: str =
 
 
 def _event(message: str, agent_type: str = "qa", session: str = "s1", agent_id: str = "a1") -> str:
-    return json.dumps({"session_id": session, "agent_id": agent_id, "agent_type": agent_type,
-                       "last_assistant_message": message})
+    return json.dumps(
+        {"session_id": session, "agent_id": agent_id, "agent_type": agent_type, "last_assistant_message": message}
+    )
 
 
 class Recorder:
@@ -166,9 +179,17 @@ def test_us14_main_refusal_returns_2_with_errors_on_stderr(hook, tmp_path, capsy
 
 
 def _handback_event(message: str, hook_event: str = "PostToolUse", agent_type: str = "qa", last: str = "") -> str:
-    return json.dumps({"session_id": "s1", "agent_id": "a1", "agent_type": agent_type,
-                       "hook_event_name": hook_event, "tool_name": "SubagentHandback",
-                       "tool_input": {"message": message}, "last_assistant_message": last})
+    return json.dumps(
+        {
+            "session_id": "s1",
+            "agent_id": "a1",
+            "agent_type": agent_type,
+            "hook_event_name": hook_event,
+            "tool_name": "SubagentHandback",
+            "tool_input": {"message": message},
+            "last_assistant_message": last,
+        }
+    )
 
 
 @pytest.mark.parametrize("hook_event", ["PreToolUse", "PostToolUse"])
@@ -192,3 +213,81 @@ def test_us14_main_handback_message_wins_when_last_message_empty_of_block(hook, 
     event = _handback_event(_block('{"a": 1}'), last="thanks, done")
     assert hook.main(event, active, rec) == 0
     assert rec.calls == [(run, "u3-write-1", {"a": 1})]
+
+
+def _nested_setup(tmp_path: Path, content, claim_session: str | None = "s1", name: str = "agent-n1.jsonl"):
+    run = tmp_path / "run"
+    run.mkdir(exist_ok=True)
+    (run / "state.json").write_text(json.dumps(STATE))
+    active = tmp_path / "active"
+    active.mkdir(exist_ok=True)
+    if claim_session is not None:
+        (active / "claim.json").write_text(json.dumps({**CLAIM, "session": claim_session, "run": str(run)}))
+    transcript = tmp_path / name
+    records = [
+        {"type": "user", "agentId": "n1", "sessionId": "s1", "message": {"role": "user", "content": content}},
+        {"type": "assistant", "message": {"role": "assistant", "content": "working"}},
+    ]
+    transcript.write_text("\n".join(json.dumps(r) for r in records) + "\n")
+    return active, run, transcript
+
+
+def _nested_event(transcript: Path, session: str = "s1") -> str:
+    return json.dumps(
+        {
+            "session_id": session,
+            "agent_id": "n1",
+            "agent_type": "qa",
+            "agent_transcript_path": str(transcript),
+            "last_assistant_message": "done\n" + _block(json.dumps(RESULT)),
+        }
+    )
+
+
+def _prompt(run: Path) -> str:
+    return f"wf-step: u3-write-1\nRun folder: {run}\nAgent: qa\n\nWrite the tests.\n"
+
+
+def test_us21_nested_agent_result_recorded_from_transcript_prompt(hook, tmp_path):
+    active, run, transcript = _nested_setup(tmp_path, "placeholder")
+    transcript.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": _prompt(run)}}) + "\n")
+    rec = Recorder()
+    assert hook.main(_nested_event(transcript), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", RESULT)]
+
+
+def test_us21_nested_agent_prompt_as_text_parts_is_recorded(hook, tmp_path):
+    active, run, transcript = _nested_setup(tmp_path, "placeholder")
+    parts = [{"type": "text", "text": "wf-step: u3-write-1\n"}, {"type": "text", "text": f"Run folder: {run}\n"}]
+    transcript.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": parts}}) + "\n")
+    rec = Recorder()
+    assert hook.main(_nested_event(transcript), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", RESULT)]
+
+
+def test_us21_nested_agent_run_held_by_other_session_or_nobody_records_nothing(hook, tmp_path):
+    active, run, transcript = _nested_setup(tmp_path, "placeholder")
+    transcript.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": _prompt(run)}}) + "\n")
+    rec = Recorder()
+    assert hook.main(_nested_event(transcript), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", RESULT)]
+    (active / "claim.json").write_text(json.dumps({**CLAIM, "session": "other", "run": str(run)}))
+    assert hook.main(_nested_event(transcript), active, rec) == 0
+    (active / "claim.json").unlink()
+    assert hook.main(_nested_event(transcript), active, rec) == 0
+    assert len(rec.calls) == 1
+
+
+def test_us21_nested_agent_without_transcript_or_run_line_records_nothing(hook, tmp_path):
+    active, run, transcript = _nested_setup(tmp_path, "placeholder")
+    transcript.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": _prompt(run)}}) + "\n")
+    rec = Recorder()
+    assert hook.main(_nested_event(transcript), active, rec) == 0
+    assert rec.calls == [(run, "u3-write-1", RESULT)]
+    transcript.write_text(
+        json.dumps({"type": "user", "message": {"role": "user", "content": "wf-step: u3-write-1\n"}}) + "\n"
+    )
+    assert hook.main(_nested_event(transcript), active, rec) == 0
+    transcript.unlink()
+    assert hook.main(_nested_event(transcript), active, rec) == 0
+    assert len(rec.calls) == 1
