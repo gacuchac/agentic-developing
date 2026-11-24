@@ -80,8 +80,24 @@ def _red_run(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
     return ("expected" if covered and qa["red_run"]["reason_expected"] else "unexpected"), red, state
 
 
+def _verify(state: dict, ctx: Ctx) -> tuple[str, dict, dict]:
+    """Give `tests_touched`, `fail` (stray failure, failing added test or dispute), or the unit's lane."""
+    unit = (ctx.run / "unit.md").read_text()
+    touched = ctx.touched(ctx.repo)
+    disputed = _result(state, "implement").get("tests_disputed", [])
+    entry = {"failed": [], "disputed": disputed, "touched": touched}
+    if touched:
+        return "tests_touched", entry, state
+    entry["failed"] = ctx.tests(ctx.repo, [])["failed"]
+    added = _result(state, "qa_write")["tests_added"]
+    stray = [f for f in entry["failed"] if f not in units.declared_breaks(unit)]
+    hit = [f for f in entry["failed"] if f in added or f.split("::")[0] in added]
+    return ("fail" if stray or hit or disputed else units.unit_lane(unit)), entry, state
+
+
 HANDLERS: dict[str, Handler] = {
     "write_unit": _write_unit,
     "next_unit": _next_unit,
     "red_run": _red_run,
+    "verify": _verify,
 }
