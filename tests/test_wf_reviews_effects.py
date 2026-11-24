@@ -1,5 +1,6 @@
 """Tests for effects.reviews (US-8): run a pass and fetch the text to check quotes against."""
 
+import contextlib
 import subprocess
 from pathlib import Path
 
@@ -49,3 +50,66 @@ def test_us8_review_source_base_returns_diff_to_head(repo):
     assert "+line-two" in out
     assert "+line-three" in out
     assert "third" not in out.replace("line-three", "")
+
+
+_STUB = (
+    "import sys, time\n"
+    "time.sleep(0.3)\n"
+    "if sys.argv[1:2] == ['say']:\n"
+    "    print('saved: ' + sys.argv[2], file=sys.stderr)\n"
+)
+
+
+@pytest.fixture
+def stub(tmp_path: Path) -> Path:
+    path = tmp_path / "stub_review.py"
+    path.write_text(_STUB)
+    return path
+
+
+def _alive(pid: int) -> bool:
+    import os
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def test_us8_collect_pass_returns_the_saved_path(tmp_path, stub):
+    handle = reviews.start_pass(["say", "/x/saved-review.md"], tmp_path, tmp_path / "log.txt", script=stub)
+    assert reviews.collect_pass(handle, 10) == Path("/x/saved-review.md")
+
+
+def test_us8_collect_pass_without_saved_line_returns_none(tmp_path, stub):
+    handle = reviews.start_pass(["silent"], tmp_path, tmp_path / "log.txt", script=stub)
+    assert reviews.collect_pass(handle, 10) is None
+
+
+def test_us8_collect_pass_timeout_returns_none_and_leaves_process_running(tmp_path, stub):
+    import os
+    import signal
+
+    handle = reviews.start_pass(["say", "/x/r.md"], tmp_path, tmp_path / "log.txt", script=stub)
+    try:
+        assert reviews.collect_pass(handle, 0.05) is None
+        assert _alive(handle["pid"])
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(handle["pid"], signal.SIGKILL)
+
+
+def test_us8_start_pass_returns_promptly_with_pid_and_log(tmp_path, stub):
+    import time
+
+    log = tmp_path / "log.txt"
+    t0 = time.monotonic()
+    handle = reviews.start_pass(["say", "/x/r.md"], tmp_path, log, script=stub)
+    elapsed = time.monotonic() - t0
+    try:
+        assert elapsed < 0.25
+        assert isinstance(handle["pid"], int)
+        assert handle["log"] == str(log)
+    finally:
+        reviews.collect_pass(handle, 10)
