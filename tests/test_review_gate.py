@@ -382,3 +382,18 @@ def test_us2_gate_message_names_all_three_ways_to_unblock(ws_project, capsys):
     assert "commit review" in err
     assert "tests review" in err
     assert "evidence" in err
+
+
+@pytest.mark.parametrize("branch", ["feature/x", "main"])
+def test_us27_gate_passes_silently_in_repo_with_no_commits(tmp_path, monkeypatch, capsys, branch):
+    ws = tmp_path.resolve() / "Developing"
+    proj = ws / "proj"
+    proj.mkdir(parents=True)
+    monkeypatch.chdir(proj)
+    _git("init", "-b", branch)
+    Path("staged.txt").write_text("x")
+    _git("add", "staged.txt")
+    assert gate.main(ws) == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out == ""
