@@ -75,9 +75,37 @@ def _in(repo: Path) -> Iterator[None]:
         os.chdir(before)
 
 
+def is_failed(test_id: str, failed: list[str]) -> bool:
+    """Return True when `failed` has `test_id` itself or one of its parametrized cases `test_id[...]`."""
+    return any(f == test_id or f.startswith(test_id + "[") for f in failed)
+
+
 def red_ids(repo: Path, commit: str, added: list[str], python: Path) -> list[str]:
     """Return the `added` test ids that fail in a worktree of `repo` at `commit`."""
     checks = load_module(_SCRIPTS / "workflow" / "effects" / "checks.py")
     with _in(repo), load_module(_SCRIPTS / "codex_review.py").review_tree(commit) as tree:
         failed = checks.run_pytest(tree, added, python)["failed"]
-    return [t for t in added if any(f.startswith(t) for f in failed)]
+    return [t for t in added if is_failed(t, failed)]
+
+
+def measure(repo: Path, run: Path, sha: str, python: Path) -> dict:
+    """Return the evidence record of the fix commit `sha` in `repo` (fields: see architecture.md)."""
+    checks = load_module(_SCRIPTS / "workflow" / "effects" / "checks.py")
+    contracts = load_module(_SCRIPTS / "workflow" / "contracts.py")
+    commit = tests_commit(repo, sha)
+    added = added_tests(_git(repo, "show", "--format=", commit)) if commit else []
+    span = f"{commit}..{sha}" if commit else f"{sha}^..{sha}"
+    failed = checks.run_pytest(repo, [], python)["failed"]
+    names = contracts.changed_signatures(_git(repo, "diff", span))
+    paths = _git(repo, "show", "--name-only", "--format=", sha).split()
+    return {
+        "tests_commit": commit,
+        "added": added,
+        "red": red_ids(repo, commit, added, python) if commit else [],
+        "green": [t for t in added if not is_failed(t, failed)],
+        "failed": failed,
+        "breaks": declared_breaks(run),
+        "tests_touched": [p for p in _git(repo, "diff", "--name-only", span).split() if "tests" in Path(p).parts[:-1]],
+        "uncovered": sorted(contracts.uncovered(names, (run / "architecture.md").read_text())),
+        "code_changed": any("tests" not in Path(p).parts[:-1] and not p.endswith(".md") for p in paths),
+    }
