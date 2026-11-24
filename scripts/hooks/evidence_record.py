@@ -124,8 +124,52 @@ def failures_at(repo: Path, commit: str, targets: list[str], python: Path) -> li
         return checks.run_pytest(tree, targets, python)["failed"]
 
 
+def failures_with_tests(
+    repo: Path, commit: str, sha: str, paths: list[str], targets: list[str], python: Path
+) -> list[str]:
+    """Return the ids failing when `targets` run in a worktree at `commit` with files `paths` as at `sha`."""
+    checks = load_module(_SCRIPTS / "workflow" / "effects" / "checks.py")
+    with _in(repo), load_module(_SCRIPTS / "codex_review.py").review_tree(commit) as tree:
+        for path in paths:
+            (tree / path).parent.mkdir(parents=True, exist_ok=True)
+            (tree / path).write_text(_git(repo, "show", f"{sha}:{path}"))
+        return checks.run_pytest(tree, targets, python)["failed"]
+
+
+def _test_files(repo: Path, commit: str, sha: str) -> list[str]:
+    log = _git(repo, "log", "--format=%H %s", f"{commit}^..{sha}").splitlines()
+    shas = [line.split()[0] for line in log if line.partition(" ")[2].startswith("test(")]
+    paths = {p for s in shas for p in _git(repo, "show", "--name-only", "--format=", s).split()}
+    return sorted(p for p in paths if "tests" in Path(p).parts[:-1] and p.endswith(".py"))
+
+
+def _file_at(repo: Path, rev: str, path: str) -> str | None:
+    shown = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=repo, capture_output=True, text=True)
+    return shown.stdout if shown.returncode == 0 else None
+
+
+def _changed_in_unit(repo: Path, commit: str, sha: str, paths: list[str]) -> list[str]:
+    found = []
+    for path in paths:
+        after = _file_at(repo, sha, path)
+        if after is not None:
+            found += changed_tests(_file_at(repo, f"{commit}^", path), after, path)
+    return found
+
+
+def _first_test_commit(repo: Path, commit: str | None) -> str | None:
+    while commit:
+        parent = tests_commit(repo, commit)
+        if not parent:
+            break
+        commit = parent
+    return commit
+
+
 def _test_commit(repo: Path, sha: str, given: str | None) -> str | None:
-    return _git(repo, "rev-parse", given).strip() if given else tests_commit(repo, sha)
+    if given:
+        return _git(repo, "rev-parse", given).strip()
+    return _first_test_commit(repo, tests_commit(repo, sha))
 
 
 def _touched_tests(repo: Path, commit: str | None, sha: str) -> list[str]:
@@ -149,15 +193,17 @@ def measure(repo: Path, run: Path, sha: str, python: Path, tests_commit: str | N
     """
     contracts = load_module(_SCRIPTS / "workflow" / "contracts.py")
     commit = _test_commit(repo, sha, tests_commit)
-    added = added_tests(_git(repo, "show", "--format=", commit)) if commit else []
+    test_files = _test_files(repo, commit, sha) if commit else []
+    added = _changed_in_unit(repo, commit, sha, test_files) if commit else []
     span = f"{commit}..{sha}" if commit else f"{sha}^..{sha}"
     failed = failures_at(repo, sha, [], python)
     names = contracts.changed_signatures(_git(repo, "diff", span))
     paths = _git(repo, "show", "--name-only", "--format=", sha).split()
+    red_failures = failures_with_tests(repo, commit, sha, test_files, added, python) if added else []
     return {
         "tests_commit": commit,
         "added": added,
-        "red": [t for t in added if is_failed(t, failures_at(repo, commit, added, python))],
+        "red": [t for t in added if is_failed(t, red_failures)],
         "green": [t for t in added if not is_failed(t, failed)],
         "failed": failed,
         "breaks": declared_breaks(run),
