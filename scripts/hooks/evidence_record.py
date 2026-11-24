@@ -98,10 +98,17 @@ def failures_at(repo: Path, commit: str, targets: list[str], python: Path) -> li
         return checks.run_pytest(tree, targets, python)["failed"]
 
 
-def measure(repo: Path, run: Path, sha: str, python: Path) -> dict:
-    """Return the evidence record of the fix commit `sha` in `repo` (fields: see architecture.md)."""
+def _test_commit(repo: Path, sha: str, given: str | None) -> str | None:
+    return _git(repo, "rev-parse", given).strip() if given else tests_commit(repo, sha)
+
+
+def measure(repo: Path, run: Path, sha: str, python: Path, tests_commit: str | None = None) -> dict:
+    """Return the evidence record of the fix commit `sha` in `repo` (fields: see architecture.md).
+
+    `tests_commit` (full or short sha) names the test commit; when None it is discovered before `sha`.
+    """
     contracts = load_module(_SCRIPTS / "workflow" / "contracts.py")
-    commit = tests_commit(repo, sha)
+    commit = _test_commit(repo, sha, tests_commit)
     added = added_tests(_git(repo, "show", "--format=", commit)) if commit else []
     span = f"{commit}..{sha}" if commit else f"{sha}^..{sha}"
     failed = failures_at(repo, sha, [], python)
@@ -121,15 +128,16 @@ def measure(repo: Path, run: Path, sha: str, python: Path) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run `write --run <run> [--sha] [--python]` in the current repo; return 0 when the record is complete."""
+    """Run `write --run <run> [--sha] [--python] [--tests-commit]`; return 0 when the record is complete."""
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["write"])
     parser.add_argument("--run", type=Path, required=True)
     parser.add_argument("--sha", default="HEAD")
     parser.add_argument("--python", type=Path, default=Path(sys.executable))
+    parser.add_argument("--tests-commit")
     args = parser.parse_args(argv)
     sha = _git(Path.cwd(), "rev-parse", args.sha).strip()
-    record = measure(Path.cwd(), args.run, sha, args.python)
+    record = measure(Path.cwd(), args.run, sha, args.python, args.tests_commit)
     (args.run / f"evidence-{sha}.json").write_text(json.dumps(record, indent=2))
     failing = failing_fields(record)
     if failing:
