@@ -25,14 +25,21 @@ def all_red(tests: list[str], failed: list[str]) -> bool:
 
 
 def run_pytest(repo: Path, targets: list[str], python: Path | None = None) -> dict:
-    """Run pytest on targets in repo; return {"code": exit code, "failed": failing ids}."""
+    """Run pytest on targets in repo; return {"code": exit code, "failed": failing ids}.
+
+    A non-zero exit that names no failing test gives one entry, `pytest exit <code>: <last output line>`.
+    """
     venv_python = repo / ".venv" / "bin" / "python"
     interpreter = python or (venv_python if venv_python.exists() else Path(sys.executable))
     proc = subprocess.run(
         [str(interpreter), "-m", "pytest", "-q", "-rfE", *targets],
         cwd=repo, capture_output=True, text=True, check=False,
     )
-    return {"code": proc.returncode, "failed": failed_ids(proc.stdout)}
+    failed = failed_ids(proc.stdout)
+    if proc.returncode and not failed:
+        lines = [line for line in (proc.stdout + proc.stderr).splitlines() if line.strip()]
+        failed = [f"pytest exit {proc.returncode}: {lines[-1] if lines else ''}"]
+    return {"code": proc.returncode, "failed": failed}
 
 
 def tests_touched(repo: Path) -> list[str]:
