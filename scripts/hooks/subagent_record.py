@@ -93,9 +93,19 @@ def _is_pending(run: Path, step_id: str, agent_type: str | None) -> bool:
     return pending.get("kind") == "agent" and pending.get("agent") == agent_type and pending.get("step_id") == step_id
 
 
-def _from_prompt(event: dict, active: Path) -> tuple[Path, str] | None:
+def _agent_transcript(event: dict) -> Path | None:
+    """Return the agent's transcript path: `agent_transcript_path` when set, else on `PreToolUse` the agent's file
+    under the session's `subagents/` folder, else None. Does no I/O."""
+    if event.get("agent_transcript_path"):
+        return Path(event["agent_transcript_path"])
+    if event.get("hook_event_name") == "PreToolUse" and event.get("transcript_path") and event.get("agent_id"):
+        return Path(event["transcript_path"]).with_suffix("") / "subagents" / f"agent-{event['agent_id']}.jsonl"
+    return None
+
+
+def _from_prompt(event: dict, active: Path, transcript: Path) -> tuple[Path, str] | None:
     """Return (run, step id) named in the agent's own prompt when this session holds that run and it is pending."""
-    prompt = _prompt_of(Path(event["agent_transcript_path"]))
+    prompt = _prompt_of(transcript)
     step_id = step_id_of(prompt)
     match = RUN_LINE.search(prompt)
     if step_id is None or match is None:
@@ -106,7 +116,7 @@ def _from_prompt(event: dict, active: Path) -> tuple[Path, str] | None:
     return (run, step_id) if held and _is_pending(run, step_id, event.get("agent_type")) else None
 
 
-def _pending_step(event: dict, active: Path) -> tuple[Path, str] | None:
+def _pending_step(event: dict, active: Path, transcript: Path | None) -> tuple[Path, str] | None:
     """Return (run folder, step id) the agent reports for: its registry entry, else the prompt in its transcript.
 
     The step must be pending for the agent type; a prompt's run must also be held by the event's session."""
@@ -114,10 +124,17 @@ def _pending_step(event: dict, active: Path) -> tuple[Path, str] | None:
     if entry:
         run = Path(entry["run"])
         return (run, entry["step_id"]) if _is_pending(run, entry["step_id"], event.get("agent_type")) else None
-    return _from_prompt(event, active) if event.get("agent_transcript_path") else None
+    return _from_prompt(event, active, transcript) if transcript is not None else None
 
 
-def _log(active: Path, event: dict, pending: tuple[Path, str] | None, result: dict | None, outcome: str) -> None:
+def _log(
+    active: Path,
+    event: dict,
+    transcript: Path | None,
+    pending: tuple[Path, str] | None,
+    result: dict | None,
+    outcome: str,
+) -> None:
     """Append one JSON line describing this event and its outcome to `<active>/recorder.log`; skip when unwritable."""
     line = {
         "ts": datetime.now().astimezone().isoformat(),
@@ -126,6 +143,7 @@ def _log(active: Path, event: dict, pending: tuple[Path, str] | None, result: di
         "agent_type": event.get("agent_type") or "",
         "session": event.get("session_id") or "",
         "transcript": bool(event.get("agent_transcript_path")),
+        "agent_transcript": str(transcript) if transcript else "",
         "step": [str(pending[0]), pending[1]] if pending else None,
         "result": result is not None,
         "outcome": outcome,
@@ -140,29 +158,40 @@ def _log(active: Path, event: dict, pending: tuple[Path, str] | None, result: di
 def main(stdin: str, active: Path, record: Callable[[Path, str, dict], list[str]]) -> int:
     """Record the result block of a stopping workflow agent; return 2 with the refusal on stderr, else 0.
 
-    `record(run, step_id, result)` returns error lines. Missing or invalid input, no registry entry,
-    no pending step for this agent, or no valid block records nothing. Each call appends one line to
-    `<active>/recorder.log` with the outcome; logging never changes the return value."""
+    `record(run, step_id, result)` returns error lines. It records from the registry entry, else from the
+    agent's prompt in its transcript (`agent_transcript_path`, or on `PreToolUse` the agent's file under the
+    session's `subagents/` folder); missing or invalid input, no step found, no pending step, no claim held
+    by this session, or no valid block records nothing. Each call appends one line to `<active>/recorder.log`
+    with the outcome; logging never changes the return value."""
     event: dict = {}
-    pending = result = None
+    pending = result = transcript = None
     try:
         event = json.loads(stdin)
-        pending = _pending_step(event, active)
+        transcript = _agent_transcript(event)
+        pending = _pending_step(event, active, transcript)
         result = (
             extract_result(event.get("last_assistant_message") or "")
             or extract_result(event.get("tool_input", {}).get("message") or "")
             or _transcript_result(event)
         )
     except Exception:
-        _log(active, event if isinstance(event, dict) else {}, pending, result, "bad input")
+        missing = transcript is not None and not transcript.exists()
+        _log(
+            active,
+            event if isinstance(event, dict) else {},
+            transcript,
+            pending,
+            result,
+            "no transcript" if missing else "bad input",
+        )
         return 0
     if pending is None or result is None:
-        _log(active, event, pending, result, "no step" if pending is None else "no result")
+        _log(active, event, transcript, pending, result, "no step" if pending is None else "no result")
         return 0
     errors = record(pending[0], pending[1], result)
     if errors:
         print("\n".join(errors), file=sys.stderr)
-    _log(active, event, pending, result, "refused" if errors else "recorded")
+    _log(active, event, transcript, pending, result, "refused" if errors else "recorded")
     return 2 if errors else 0
 
 
